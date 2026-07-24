@@ -79,7 +79,7 @@ test("ignored agent .env supports export syntax and quoted values", async () => 
   assert.ok(config.apiKey);
 });
 
-test("configuration does not read Hermes environment files", async () => {
+test("configuration does not read unrelated environment files", async () => {
   const directory = await mkdtemp(
     join(tmpdir(), "pi-firecrawl-unrelated-config-"),
   );
@@ -92,7 +92,7 @@ test("configuration does not read Hermes environment files", async () => {
   assert.throws(
     () =>
       resolveFirecrawlConfig({
-        env: { HERMES_HOME: directory },
+        env: { UNRELATED_TOOL_HOME: directory },
         envPath: "/missing/.env",
       }),
     /Missing FIRECRAWL_API_URL/,
