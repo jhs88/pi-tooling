@@ -1,0 +1,6 @@
+node_modules/
+.cachebro/
+.pi-workflows/
+.pi-background/
+file-search/bin/
+*.log
