@@ -30,6 +30,8 @@ pi update --all
 
 Do not copy this repository into `~/.pi/agent/extensions`; that bypasses Pi's package lifecycle and leaves runtime dependencies unmanaged.
 
+See [`docs/package-lifecycle.md`](docs/package-lifecycle.md) for update and repair behavior.
+
 ## Firecrawl configuration
 
 The package resolves `FIRECRAWL_API_URL` and optional `FIRECRAWL_API_KEY` in this order:
