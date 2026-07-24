@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadExtensions } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js";
+import { loadSkillsFromDir } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/skills.js";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -39,4 +40,20 @@ test("the package extension loads without registration conflicts", async () => {
     .filter(([, registeredBy]) => registeredBy.length > 1)
     .map(([name, registeredBy]) => ({ name, registeredBy }));
   assert.deepEqual(duplicates, []);
+});
+
+test("the package exposes its background-terminal guidance as a Pi skill", async () => {
+  const manifest = JSON.parse(
+    await readFile(join(packageRoot, "package.json"), "utf8"),
+  ) as { pi?: { skills?: string[] } };
+  assert.deepEqual(manifest.pi?.skills, ["./skills"]);
+
+  const result = loadSkillsFromDir({
+    dir: join(packageRoot, "skills"),
+    source: "@jhs88/pi-tooling",
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.skills.map((skill) => skill.name), [
+    "background-terminals",
+  ]);
 });

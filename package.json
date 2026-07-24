@@ -1,16 +1,23 @@
 {
   "name": "@jhs88/pi-tooling",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Selected file search, Firecrawl, ask-user, background terminal, and workflow tools for Pi",
   "repository": {
     "type": "git",
     "url": "https://github.com/jhs88/pi-tooling.git"
   },
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package"
+  ],
   "type": "module",
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
   "scripts": {
     "check": "tsc --noEmit -p .",

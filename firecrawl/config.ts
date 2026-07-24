@@ -11,7 +11,6 @@ export interface FirecrawlConfig {
 export interface FirecrawlConfigOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly envPath?: string;
-  readonly globalEnvPath?: string;
 }
 
 export class FirecrawlConfigError extends Error {
@@ -20,13 +19,6 @@ export class FirecrawlConfigError extends Error {
 
 export function agentEnvPath() {
   return join(homedir(), ".pi", "agent", ".env");
-}
-
-export function globalHermesEnvPath(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-) {
-  const hermesHome = env.HERMES_HOME?.trim();
-  return join(hermesHome || join(homedir(), ".hermes"), ".env");
 }
 
 function stripInlineComment(raw: string) {
@@ -86,23 +78,15 @@ export function resolveFirecrawlConfig(
 ): FirecrawlConfig {
   const env = options.env ?? process.env;
   const fileValues = readEnvFile(options.envPath ?? agentEnvPath());
-  const globalValues = readEnvFile(
-    options.globalEnvPath ?? globalHermesEnvPath(env),
-  );
   const readValue = (name: string) => {
     const processValue = env[name]?.trim();
-    return (
-      processValue ||
-      fileValues.get(name)?.trim() ||
-      globalValues.get(name)?.trim() ||
-      undefined
-    );
+    return processValue || fileValues.get(name)?.trim() || undefined;
   };
 
   const apiUrl = readValue("FIRECRAWL_API_URL");
   if (!apiUrl) {
     throw new FirecrawlConfigError(
-      "Missing FIRECRAWL_API_URL in the environment, ~/.pi/agent/.env, or the global Hermes environment; an explicit self-hosted endpoint is required.",
+      "Missing FIRECRAWL_API_URL in the environment or ~/.pi/agent/.env; an explicit self-hosted endpoint is required.",
     );
   }
   if (!URL.canParse(apiUrl)) {

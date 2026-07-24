@@ -14,6 +14,8 @@ A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/co
 
 The package supplements rather than replaces [`@tintinweb/pi-subagents`](https://www.npmjs.com/package/@tintinweb/pi-subagents).
 
+It also bundles a `background-terminals` skill so Pi receives usage and lifecycle guidance alongside the `bg_*` tools it describes.
+
 ## Requirements
 
 - Pi with managed Git-package support
@@ -59,8 +61,7 @@ FIRECRAWL_API_KEY=<optional-key>
 Configuration precedence is:
 
 1. process environment;
-2. Pi's `agent/.env`;
-3. the global Hermes environment at `$HERMES_HOME/.env` or `~/.hermes/.env`, when present.
+2. Pi's `agent/.env`.
 
 Only explicit HTTP(S) endpoints are accepted. The public Firecrawl Cloud endpoint is never selected as a fallback.
 
