@@ -1,4 +1,5 @@
 node_modules/
+.scratch/
 .cachebro/
 .pi-workflows/
 .pi-background/

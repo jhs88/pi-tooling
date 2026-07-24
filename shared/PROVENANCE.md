@@ -4,4 +4,4 @@ These shared child-session helpers were selectively copied and adapted at the re
 
 Adapted files: `activity-status.ts`, `child-session.ts`, `context-utilization.ts`, `tool-call-timeout.ts`, and their focused tests. Local changes add the complete Pi tooling recursion/background denylist and construct Pi 0.80.10's canonical `ModelRuntime` instead of passing the obsolete `modelRegistry` session option.
 
-The pinned upstream repository had no detected license. This is owner-directed adaptation, not a claim that the source is open source or generally licensed for reuse. See `.scratch/selective-pi-tooling-extensions/research/upstream-compatibility-and-provenance.md`.
+The pinned upstream repository had no detected license. This is owner-directed adaptation, not a claim that the source is open source or generally licensed for reuse. See `docs/history/selective-pi-tooling-extensions/research/upstream-compatibility-and-provenance.md`.
