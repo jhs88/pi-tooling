@@ -14,7 +14,7 @@ A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/co
 
 The package supplements rather than replaces [`@tintinweb/pi-subagents`](https://www.npmjs.com/package/@tintinweb/pi-subagents).
 
-It also bundles a `background-terminals` skill so Pi receives usage and lifecycle guidance alongside the `bg_*` tools it describes.
+It also bundles `background-terminals` and `workflows` skills so Pi receives operational guidance alongside the specialized tools they describe.
 
 ## Requirements
 

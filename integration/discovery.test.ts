@@ -42,7 +42,7 @@ test("the package extension loads without registration conflicts", async () => {
   assert.deepEqual(duplicates, []);
 });
 
-test("the package exposes its background-terminal guidance as a Pi skill", async () => {
+test("the package exposes guidance for its specialized Pi tools as skills", async () => {
   const manifest = JSON.parse(
     await readFile(join(packageRoot, "package.json"), "utf8"),
   ) as { pi?: { skills?: string[] } };
@@ -55,5 +55,6 @@ test("the package exposes its background-terminal guidance as a Pi skill", async
   assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(result.skills.map((skill) => skill.name), [
     "background-terminals",
+    "workflows",
   ]);
 });
