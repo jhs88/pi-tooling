@@ -59,6 +59,18 @@ function deferred() {
   return { promise, resolve };
 }
 
+async function boundedBarrier(promise: Promise<void>, label: string): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out`)), 2_000);
+  });
+  try {
+    await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 interface FakeSession extends HostedPiSession {
   prompts: string[];
   abortCalls: number;
@@ -463,9 +475,9 @@ test("concurrent hosts serialize turns for one mapped context", async () => {
     let secondRun: Promise<unknown> | undefined;
     let settlements: PromiseSettledResult<unknown>[] = [];
     try {
-      await firstEntered.promise;
+      await boundedBarrier(firstEntered.promise, "first mapped turn entry");
       secondRun = secondHost.execute(executionInput("ctx-mapped-turn", "second"));
-      await secondWaiting.promise;
+      await boundedBarrier(secondWaiting.promise, "second mapped turn lock wait");
       assert.equal(second.inputs.length, 0);
     } finally {
       firstRelease.resolve();
