@@ -389,6 +389,64 @@ test("failed unmaterialized initialization evicts its cached session before retr
   });
 });
 
+test("unmaterialized session cleanup finishes before a competing host acquires the lock", async () => {
+  await withFixture(async (fixture) => {
+    const closeEntered = deferred();
+    const closeRelease = deferred();
+    const firstSessionFile = path.join(fixture.sessionsDir, "unmaterialized.jsonl");
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async () => ({
+        sessionFile: firstSessionFile,
+        messages: [],
+        async prompt() { throw new Error("lazy prompt failed"); },
+        async abort() {},
+        async close() {
+          closeEntered.resolve();
+          await closeRelease.promise;
+        },
+      }),
+    });
+    const secondEntered = deferred();
+    const second = fakeFactory();
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        secondEntered.resolve();
+        return second.factory(input);
+      },
+    });
+    const firstRun = firstHost.execute(
+      executionInput("ctx-cleanup-order", "first"),
+    );
+    const firstOutcome = firstRun.then(
+      () => undefined,
+      (error) => error,
+    );
+    await closeEntered.promise;
+
+    const secondRun = secondHost.execute(
+      executionInput("ctx-cleanup-order", "second"),
+    );
+    const earlyOutcome = await Promise.race([
+      secondEntered.promise.then(() => "entered" as const),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
+    ]);
+    assert.equal(earlyOutcome, "blocked");
+
+    closeRelease.resolve();
+    assert.match(String(await firstOutcome), /lazy prompt failed/);
+    await secondRun;
+    assert.equal(second.inputs.length, 1);
+    const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
+    assert.equal(
+      registry.contexts["ctx-cleanup-order"].sessionFile,
+      second.sessions[0].sessionFile,
+    );
+    await Promise.all([firstHost.close(), secondHost.close()]);
+  });
+});
+
 test("concurrent capacity is enforced before constructing a second session", async () => {
   await withFixture(async (fixture) => {
     const firstEntered = deferred();
