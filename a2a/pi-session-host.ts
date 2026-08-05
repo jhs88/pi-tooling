@@ -601,6 +601,7 @@ export class PiSessionHost {
           )
         : undefined;
       if (sessionFile) await chmod(sessionFile, 0o600);
+      if (signal.aborted) throw abortError(signal);
       const session = await this.#sessionFactory({
         contextId,
         cwd: this.#cwd,

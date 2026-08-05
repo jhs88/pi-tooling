@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, readFile, mkdir, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, readFile, mkdir, mkdtemp, rm, stat, symlink, watch, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import test from "node:test";
@@ -446,12 +446,22 @@ test("abort while waiting for context initialization never constructs a session"
     const secondRun = secondHost.execute(
       executionInput("ctx-lock-waiter", "two", abortController.signal),
     );
+    let secondSettled = false;
+    const secondOutcome = secondRun.then(
+      () => {
+        secondSettled = true;
+        return "fulfilled" as const;
+      },
+      (error) => {
+        secondSettled = true;
+        return error;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(secondSettled, false);
     abortController.abort(abortReason);
     const earlyOutcome = await Promise.race([
-      secondRun.then(
-        () => "fulfilled" as const,
-        (error) => error,
-      ),
+      secondOutcome,
       new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 50)),
     ]);
     firstRelease.resolve();
@@ -482,10 +492,19 @@ test("host close interrupts a pending context-initialization lock wait", async (
     const firstRun = firstHost.execute(executionInput("ctx-close-owner", "one"));
     await firstEntered.promise;
     const secondRun = secondHost.execute(executionInput("ctx-close-waiter", "two"));
+    let secondSettled = false;
     const secondOutcome = secondRun.then(
-      () => undefined,
-      (error) => error,
+      () => {
+        secondSettled = true;
+        return undefined;
+      },
+      (error) => {
+        secondSettled = true;
+        return error;
+      },
     );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(secondSettled, false);
 
     const closeOutcome = Promise.race([
       secondHost.close().then(() => "closed" as const),
@@ -499,6 +518,46 @@ test("host close interrupts a pending context-initialization lock wait", async (
     assert.equal(earlyOutcome, "closed");
     assert.equal(second.inputs.length, 0);
     await firstHost.close();
+  });
+});
+
+test("abort after session-directory setup never constructs a session", async () => {
+  await withFixture(async (fixture) => {
+    await mkdir(path.dirname(fixture.sessionsDir), { recursive: true, mode: 0o700 });
+    const watchController = new AbortController();
+    const events = watch(path.dirname(fixture.sessionsDir), {
+      signal: watchController.signal,
+    });
+    const sessionDirectoryCreated = (async () => {
+      for await (const event of events) {
+        if (event.filename === path.basename(fixture.sessionsDir)) return;
+      }
+    })();
+    let factoryCalls = 0;
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async () => {
+        factoryCalls++;
+        throw new Error("factory must not run");
+      },
+    });
+    const controller = new AbortController();
+    const abortReason = new Error("cancel after directory setup");
+    const execution = host.execute(
+      executionInput("ctx-directory-abort", "wait", controller.signal),
+    );
+    const outcome = execution.then(
+      () => undefined,
+      (error) => error,
+    );
+
+    await sessionDirectoryCreated;
+    controller.abort(abortReason);
+    watchController.abort();
+
+    assert.equal(await outcome, abortReason);
+    assert.equal(factoryCalls, 0);
+    await host.close();
   });
 });
 
