@@ -472,27 +472,41 @@ test("unmaterialized session cleanup finishes before a competing host acquires t
       (error) => error,
     );
     await closeEntered.promise;
-
-    const secondRun = secondHost.execute(
-      executionInput("ctx-cleanup-order", "second"),
-    );
-    const earlyOutcome = await Promise.race([
-      secondEntered.promise.then(() => "entered" as const),
-      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
-    ]);
-
-    closeRelease.resolve();
-    const firstError = await firstOutcome;
-    await secondRun;
+    let lockHeldDuringCleanup = false;
+    let earlyOutcome: "entered" | "blocked" | undefined;
+    let firstError: unknown;
+    let secondError: unknown;
+    try {
+      lockHeldDuringCleanup = (await stat(`${fixture.registryPath}.lock`)).isDirectory();
+      const secondRun = secondHost.execute(
+        executionInput("ctx-cleanup-order", "second"),
+      );
+      const secondOutcome = secondRun.then(
+        () => undefined,
+        (error) => error,
+      );
+      earlyOutcome = await Promise.race([
+        secondEntered.promise.then(() => "entered" as const),
+        new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
+      ]);
+      closeRelease.resolve();
+      firstError = await firstOutcome;
+      secondError = await secondOutcome;
+    } finally {
+      closeRelease.resolve();
+      firstError ??= await firstOutcome;
+      await Promise.all([firstHost.close(), secondHost.close()]);
+    }
+    assert.equal(lockHeldDuringCleanup, true);
     assert.equal(earlyOutcome, "blocked");
     assert.match(String(firstError), /lazy prompt failed/);
+    assert.equal(secondError, undefined);
     assert.equal(second.inputs.length, 1);
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
     assert.equal(
       registry.contexts["ctx-cleanup-order"].sessionFile,
       second.sessions[0].sessionFile,
     );
-    await Promise.all([firstHost.close(), secondHost.close()]);
   });
 });
 
