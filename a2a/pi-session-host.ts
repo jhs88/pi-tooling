@@ -507,7 +507,7 @@ export class PiSessionHost {
       return result;
     } finally {
       try {
-        await this.#releaseInitializationLock(input.contextId);
+        await this.#releaseInitializationLock(input.contextId, true);
       } finally {
         if (session && onAbort) {
           input.signal.removeEventListener("abort", onAbort);
@@ -625,7 +625,7 @@ export class PiSessionHost {
       }
     } catch (error) {
       if (holdsInitializationLock) {
-        await this.#releaseInitializationLock(contextId);
+        await this.#releaseInitializationLock(contextId, true);
       } else {
         await release();
       }
@@ -676,17 +676,30 @@ export class PiSessionHost {
     if (!held) {
       return withRegistryLock(this.#agentDir, this.#registryPath, run);
     }
+    let mapped = false;
     try {
-      return await run();
+      const result = await run();
+      mapped = true;
+      return result;
     } finally {
-      await this.#releaseInitializationLock(contextId);
+      await this.#releaseInitializationLock(contextId, !mapped);
     }
   }
 
-  async #releaseInitializationLock(contextId: string): Promise<void> {
+  async #releaseInitializationLock(
+    contextId: string,
+    discardCachedSession = false,
+  ): Promise<void> {
     const release = this.#initializationLocks.get(contextId);
     if (!release) return;
     this.#initializationLocks.delete(contextId);
+    if (discardCachedSession) {
+      const session = this.#sessions.get(contextId);
+      if (session) {
+        this.#sessions.delete(contextId);
+        await session.close().catch(() => {});
+      }
+    }
     await release();
   }
 

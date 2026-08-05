@@ -343,6 +343,52 @@ test("concurrent creation of one context reopens the first canonical session", a
   });
 });
 
+test("failed unmaterialized initialization evicts its cached session before retry", async () => {
+  await withFixture(async (fixture) => {
+    let factoryCalls = 0;
+    let closeCalls = 0;
+    const factory: PiSessionFactory = async (input) => {
+      factoryCalls++;
+      const factoryCall = factoryCalls;
+      const sessionFile = path.join(input.sessionsDir, `retry-${factoryCall}.jsonl`);
+      const messages: unknown[] = [];
+      let promptCalls = 0;
+      return {
+        sessionFile,
+        messages,
+        async prompt() {
+          promptCalls++;
+          if (factoryCall === 1 && promptCalls === 1) {
+            throw new Error("first lazy prompt failed");
+          }
+          await mkdir(input.sessionsDir, { recursive: true });
+          await writeFile(sessionFile, '{"type":"session"}\n', { mode: 0o600 });
+          messages.push({
+            role: "assistant",
+            content: [{ type: "text", text: "retry succeeded" }],
+          });
+        },
+        async abort() {},
+        async close() { closeCalls++; },
+      };
+    };
+    const host = new PiSessionHost({ ...fixture, sessionFactory: factory });
+
+    await assert.rejects(
+      host.execute(executionInput("ctx-lazy-retry", "first")),
+      /first lazy prompt failed/,
+    );
+    assert.equal(closeCalls, 1);
+    const result = await host.execute(executionInput("ctx-lazy-retry", "second"));
+
+    assert.equal(result.text, "retry succeeded");
+    assert.equal(factoryCalls, 2);
+    const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
+    assert.match(registry.contexts["ctx-lazy-retry"].sessionFile, /retry-2\.jsonl$/);
+    await host.close();
+  });
+});
+
 test("concurrent capacity is enforced before constructing a second session", async () => {
   await withFixture(async (fixture) => {
     const firstEntered = deferred();
