@@ -636,8 +636,19 @@ test("abort after session-directory setup never constructs a session", async () 
       signal: watchController.signal,
     });
     const sessionDirectoryCreated = (async () => {
-      for await (const event of events) {
-        if (event.filename === path.basename(fixture.sessionsDir)) return;
+      try {
+        for await (const event of events) {
+          if (event.filename === path.basename(fixture.sessionsDir)) return;
+          if (
+            event.filename === null &&
+            await stat(fixture.sessionsDir).then(
+              (entry) => entry.isDirectory(),
+              () => false,
+            )
+          ) return;
+        }
+      } catch (error) {
+        if (!watchController.signal.aborted) throw error;
       }
     })();
     let factoryCalls = 0;
@@ -658,13 +669,28 @@ test("abort after session-directory setup never constructs a session", async () 
       (error) => error,
     );
 
-    await sessionDirectoryCreated;
-    controller.abort(abortReason);
-    watchController.abort();
-
-    assert.equal(await outcome, abortReason);
-    assert.equal(factoryCalls, 0);
-    await host.close();
+    let observationTimeout: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        sessionDirectoryCreated,
+        new Promise<never>((_, reject) => {
+          observationTimeout = setTimeout(
+            () => reject(new Error("timed out waiting for canonical session directory")),
+            2_000,
+          );
+        }),
+      ]);
+      controller.abort(abortReason);
+      assert.equal(await outcome, abortReason);
+      assert.equal(factoryCalls, 0);
+    } finally {
+      if (observationTimeout) clearTimeout(observationTimeout);
+      controller.abort(abortReason);
+      watchController.abort();
+      await sessionDirectoryCreated.catch(() => {});
+      await execution.catch(() => {});
+      await host.close();
+    }
   });
 });
 
