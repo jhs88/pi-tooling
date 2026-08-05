@@ -432,11 +432,12 @@ test("unmaterialized session cleanup finishes before a competing host acquires t
       secondEntered.promise.then(() => "entered" as const),
       new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
     ]);
-    assert.equal(earlyOutcome, "blocked");
 
     closeRelease.resolve();
-    assert.match(String(await firstOutcome), /lazy prompt failed/);
+    const firstError = await firstOutcome;
     await secondRun;
+    assert.equal(earlyOutcome, "blocked");
+    assert.match(String(firstError), /lazy prompt failed/);
     assert.equal(second.inputs.length, 1);
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
     assert.equal(
