@@ -619,6 +619,7 @@ test("abort while waiting for context initialization never constructs a session"
   await withFixture(async (fixture) => {
     const firstEntered = deferred();
     const firstRelease = deferred();
+    const secondWaiting = deferred();
     const first = fakeFactory();
     const second = fakeFactory();
     const firstHost = new PiSessionHost({
@@ -629,7 +630,11 @@ test("abort while waiting for context initialization never constructs a session"
         return first.factory(input);
       },
     });
-    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: second.factory,
+      onRegistryLockWait: secondWaiting.resolve,
+    });
     const firstRun = firstHost.execute(executionInput("ctx-lock-owner", "one"));
     await firstEntered.promise;
 
@@ -649,7 +654,7 @@ test("abort while waiting for context initialization never constructs a session"
         return error;
       },
     );
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await secondWaiting.promise;
     assert.equal(secondSettled, false);
     abortController.abort(abortReason);
     const earlyOutcome = await Promise.race([
@@ -670,6 +675,7 @@ test("host close interrupts a pending context-initialization lock wait", async (
   await withFixture(async (fixture) => {
     const firstEntered = deferred();
     const firstRelease = deferred();
+    const secondWaiting = deferred();
     const first = fakeFactory();
     const second = fakeFactory();
     const firstHost = new PiSessionHost({
@@ -680,7 +686,11 @@ test("host close interrupts a pending context-initialization lock wait", async (
         return first.factory(input);
       },
     });
-    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: second.factory,
+      onRegistryLockWait: secondWaiting.resolve,
+    });
     const firstRun = firstHost.execute(executionInput("ctx-close-owner", "one"));
     await firstEntered.promise;
     const secondRun = secondHost.execute(executionInput("ctx-close-waiter", "two"));
@@ -695,7 +705,7 @@ test("host close interrupts a pending context-initialization lock wait", async (
         return error;
       },
     );
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await secondWaiting.promise;
     assert.equal(secondSettled, false);
 
     const closeOutcome = Promise.race([

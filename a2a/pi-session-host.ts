@@ -73,6 +73,7 @@ export interface PiSessionHostOptions {
   sessionsDir?: string;
   maxContexts?: number;
   sessionFactory?: PiSessionFactory;
+  onRegistryLockWait?: () => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -235,10 +236,12 @@ async function acquireRegistryLock(
   agentDir: string,
   registryPath: string,
   signal?: AbortSignal,
+  onWait?: () => void,
 ): Promise<RegistryLockRelease> {
   const lockPath = `${registryPath}.lock`;
   await ensurePrivateDirectory(agentDir, path.dirname(lockPath));
   let lockIdentity: { dev: bigint; ino: bigint } | undefined;
+  let reportedWait = false;
   for (
     let attempt = 0;
     signal !== undefined || attempt < REGISTRY_LOCK_ATTEMPTS;
@@ -261,6 +264,10 @@ async function acquireRegistryLock(
       });
       if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
         throw new Error("A2A context registry lock must be a private directory");
+      }
+      if (!reportedWait) {
+        reportedWait = true;
+        onWait?.();
       }
       await new Promise<void>((resolve, reject) => {
         const onAbort = () => {
@@ -424,6 +431,7 @@ export class PiSessionHost {
   readonly #sessionsDir: string;
   readonly #maxContexts: number;
   readonly #sessionFactory: PiSessionFactory;
+  readonly #onRegistryLockWait: (() => void) | undefined;
   readonly #sessions = new Map<string, HostedPiSession>();
   readonly #mappedSessionFiles = new Map<string, string>();
   readonly #initializationLocks = new Map<string, RegistryLockRelease>();
@@ -448,6 +456,7 @@ export class PiSessionHost {
       throw new Error("maxContexts must be a positive integer");
     }
     this.#sessionFactory = options.sessionFactory ?? createSdkPiSession;
+    this.#onRegistryLockWait = options.onRegistryLockWait;
   }
 
   async execute(input: A2AExecutionInput): Promise<A2AExecutionResult> {
@@ -583,7 +592,12 @@ export class PiSessionHost {
     let holdsInitializationLock = false;
     try {
       if (!mapped) {
-        release = await acquireRegistryLock(this.#agentDir, this.#registryPath, signal);
+        release = await acquireRegistryLock(
+          this.#agentDir,
+          this.#registryPath,
+          signal,
+          this.#onRegistryLockWait,
+        );
         const registry = await this.#loadRegistry();
         mapped = registry.contexts[contextId];
         if (mapped && mapped.cwd !== this.#cwd) {
