@@ -253,6 +253,58 @@ test("one registry preserves contexts from multiple canonical workspaces", async
   });
 });
 
+test("concurrent workspace hosts do not lose each other's registry mappings", async () => {
+  await withFixture(async (fixture) => {
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((settle) => {
+        resolve = settle;
+      });
+      return { promise, resolve };
+    };
+    const firstEntered = deferred();
+    const firstRelease = deferred();
+    const secondEntered = deferred();
+    const secondRelease = deferred();
+    const first = fakeFactory();
+    const second = fakeFactory();
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        firstEntered.resolve();
+        await firstRelease.promise;
+        return first.factory(input);
+      },
+    });
+    const secondCwd = path.join(fixture.root, "workspace-two");
+    await mkdir(secondCwd);
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      cwd: secondCwd,
+      sessionsDir: path.join(fixture.agentDir, "a2a", "sessions-two"),
+      sessionFactory: async (input) => {
+        secondEntered.resolve();
+        await secondRelease.promise;
+        return second.factory(input);
+      },
+    });
+
+    const firstRun = firstHost.execute(executionInput("ctx-concurrent-one", "one"));
+    await firstEntered.promise;
+    const secondRun = secondHost.execute(executionInput("ctx-concurrent-two", "two"));
+    await secondEntered.promise;
+    firstRelease.resolve();
+    await firstRun;
+    secondRelease.resolve();
+    await secondRun;
+
+    const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
+    assert.equal(registry.contexts["ctx-concurrent-one"].cwd, fixture.cwd);
+    assert.equal(registry.contexts["ctx-concurrent-two"].cwd, secondCwd);
+    await Promise.all([firstHost.close(), secondHost.close()]);
+  });
+});
+
 test("a context cannot be rebound to a different workspace", async () => {
   await withFixture(async (fixture) => {
     const first = fakeFactory();

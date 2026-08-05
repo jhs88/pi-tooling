@@ -7,6 +7,7 @@ import {
   realpath,
   rename,
   rm,
+  rmdir,
   writeFile,
 } from "node:fs/promises";
 import * as path from "node:path";
@@ -25,6 +26,8 @@ import type { A2AExecutionInput, A2AExecutionResult } from "./server.ts";
 
 const REGISTRY_VERSION = 1;
 const DEFAULT_MAX_CONTEXTS = 256;
+const REGISTRY_LOCK_ATTEMPTS = 250;
+const REGISTRY_LOCK_RETRY_MS = 20;
 const SAFE_CONTEXT_ID = /^[A-Za-z0-9._:-]{1,200}$/;
 const INPUT_REQUIRED_MARKER = "[INPUT_REQUIRED]";
 
@@ -226,6 +229,59 @@ async function writeRegistryAtomic(
   }
 }
 
+async function withRegistryLock<T>(
+  agentDir: string,
+  registryPath: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const lockPath = `${registryPath}.lock`;
+  await ensurePrivateDirectory(agentDir, path.dirname(lockPath));
+  let lockIdentity: { dev: bigint; ino: bigint } | undefined;
+  for (let attempt = 0; attempt < REGISTRY_LOCK_ATTEMPTS; attempt++) {
+    try {
+      await mkdir(lockPath, { mode: 0o700 });
+      const metadata = await lstat(lockPath, { bigint: true });
+      if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+        throw new Error("A2A context registry lock must be a private directory");
+      }
+      lockIdentity = { dev: metadata.dev, ino: metadata.ino };
+      break;
+    } catch (error) {
+      if (!isRecord(error) || error.code !== "EEXIST") throw error;
+      const metadata = await lstat(lockPath).catch((metadataError) => {
+        if (isRecord(metadataError) && metadataError.code === "ENOENT") return undefined;
+        throw metadataError;
+      });
+      if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
+        throw new Error("A2A context registry lock must be a private directory");
+      }
+      await new Promise((resolve) => setTimeout(resolve, REGISTRY_LOCK_RETRY_MS));
+    }
+  }
+  if (!lockIdentity) {
+    throw new Error(
+      "A2A context registry is locked; if no Pi A2A host is running, remove the stale contexts.json.lock directory",
+    );
+  }
+
+  try {
+    return await run();
+  } finally {
+    const metadata = await lstat(lockPath, { bigint: true }).catch((error) => {
+      throw new Error("A2A context registry lock disappeared unexpectedly", { cause: error });
+    });
+    if (
+      !metadata.isDirectory()
+      || metadata.isSymbolicLink()
+      || metadata.dev !== lockIdentity.dev
+      || metadata.ino !== lockIdentity.ino
+    ) {
+      throw new Error("A2A context registry lock changed unexpectedly");
+    }
+    await rmdir(lockPath);
+  }
+}
+
 async function validateSessionFile(
   agentDir: string,
   sessionsDir: string,
@@ -329,7 +385,6 @@ export class PiSessionHost {
   readonly #maxContexts: number;
   readonly #sessionFactory: PiSessionFactory;
   readonly #sessions = new Map<string, HostedPiSession>();
-  #registry: ContextRegistry | undefined;
   #active = false;
   #activeSession: HostedPiSession | undefined;
   #activeDone: Promise<void> | undefined;
@@ -437,7 +492,6 @@ export class PiSessionHost {
   }
 
   async #loadRegistry(): Promise<ContextRegistry> {
-    if (this.#registry) return this.#registry;
     const registryDirectory = path.dirname(this.#registryPath);
     await ensurePrivateDirectory(this.#agentDir, registryDirectory);
     let metadata;
@@ -445,8 +499,7 @@ export class PiSessionHost {
       metadata = await lstat(this.#registryPath);
     } catch (error) {
       if (isRecord(error) && error.code === "ENOENT") {
-        this.#registry = { version: REGISTRY_VERSION, contexts: Object.create(null) };
-        return this.#registry;
+        return { version: REGISTRY_VERSION, contexts: Object.create(null) };
       }
       throw new Error("Unable to read A2A context registry", { cause: error });
     }
@@ -463,7 +516,6 @@ export class PiSessionHost {
     if (workspaceContextCount > this.#maxContexts) {
       throw new Error("A2A context registry exceeds the configured limit");
     }
-    this.#registry = registry;
     return registry;
   }
 
@@ -522,35 +574,35 @@ export class PiSessionHost {
     contextId: string,
     session: HostedPiSession,
   ): Promise<void> {
-    const registry = await this.#loadRegistry();
-    const existing = registry.contexts[contextId];
-    if (existing) {
-      if (existing.cwd !== this.#cwd) {
-        throw new Error("A2A context belongs to a different workspace");
-      }
-      return;
-    }
-    const workspaceContextCount = Object.values(registry.contexts)
-      .filter((entry) => entry.cwd === this.#cwd).length;
-    if (workspaceContextCount >= this.#maxContexts) {
-      throw new Error("A2A context capacity reached");
-    }
     const canonicalFile = await validateSessionFile(
       this.#agentDir,
       this.#sessionsDir,
       session.sessionFile ?? "",
     );
     await chmod(canonicalFile, 0o600);
-    registry.contexts[contextId] = {
-      cwd: this.#cwd,
-      sessionFile: canonicalFile,
-    };
-    try {
+    await withRegistryLock(this.#agentDir, this.#registryPath, async () => {
+      const registry = await this.#loadRegistry();
+      const existing = registry.contexts[contextId];
+      if (existing) {
+        if (existing.cwd !== this.#cwd) {
+          throw new Error("A2A context belongs to a different workspace");
+        }
+        if (existing.sessionFile !== canonicalFile) {
+          throw new Error("A2A context is already mapped to a different Pi session");
+        }
+        return;
+      }
+      const workspaceContextCount = Object.values(registry.contexts)
+        .filter((entry) => entry.cwd === this.#cwd).length;
+      if (workspaceContextCount >= this.#maxContexts) {
+        throw new Error("A2A context capacity reached");
+      }
+      registry.contexts[contextId] = {
+        cwd: this.#cwd,
+        sessionFile: canonicalFile,
+      };
       await writeRegistryAtomic(this.#agentDir, this.#registryPath, registry);
-    } catch (error) {
-      delete registry.contexts[contextId];
-      throw error;
-    }
+    });
   }
 
   async #rememberContextIfPersisted(
