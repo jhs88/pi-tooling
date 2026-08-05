@@ -50,7 +50,7 @@ import {
   describeTerminal,
 } from "./src/prompt.ts";
 import { createCompletionBroker } from "./src/result-delivery.ts";
-import { sanitizeText } from "./src/ui/output-view.ts";
+import { sanitizeTerminalText } from "../shared/terminal-text.ts";
 import { openTerminalPicker } from "./src/ui/ps.ts";
 
 const WIDGET_KEY = "background-terminals";
@@ -380,7 +380,9 @@ export default function (pi: ExtensionAPI) {
       // Remove only the summary line; the Error line (when present) is part
       // of the actual result and must remain visible. The body carries raw
       // process output — sanitize ANSI/control chars or the transcript smears.
-      const body = sanitizeText(content.split("\n").slice(1).join("\n").trim());
+      const body = sanitizeTerminalText(
+        content.split("\n").slice(1).join("\n").trim(),
+      );
 
       if (expanded) {
         const md = new Markdown(`${body}`, 0, 0, getMarkdownTheme());
