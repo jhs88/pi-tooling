@@ -360,6 +360,25 @@ test("concurrent workspace hosts do not lose each other's registry mappings", as
   });
 });
 
+test("concurrent first-start hosts tolerate shared directory creation races", async () => {
+  await withFixture(async (fixture) => {
+    const fake = fakeFactory();
+    const hosts = Array.from(
+      { length: 32 },
+      () => new PiSessionHost({ ...fixture, sessionFactory: fake.factory }),
+    );
+
+    try {
+      await Promise.all(hosts.map((host, index) => host.execute(
+        executionInput(`ctx-first-start-${index}`, `message-${index}`),
+      )));
+      assert.equal(fake.inputs.length, hosts.length);
+    } finally {
+      await Promise.all(hosts.map((host) => host.close()));
+    }
+  });
+});
+
 test("concurrent creation of one context reopens the first canonical session", async () => {
   await withFixture(async (fixture) => {
     const firstEntered = deferred();

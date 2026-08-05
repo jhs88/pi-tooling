@@ -65,6 +65,11 @@ const TERMINAL_STATES = new Set<TaskState>([
   "TASK_STATE_REJECTED",
 ]);
 
+const CONTINUABLE_STATES = new Set<TaskState>([
+  "TASK_STATE_INPUT_REQUIRED",
+  "TASK_STATE_AUTH_REQUIRED",
+]);
+
 const EXECUTION_RESULT_STATES = new Set<TaskState>([
   "TASK_STATE_INPUT_REQUIRED",
   "TASK_STATE_AUTH_REQUIRED",
@@ -385,9 +390,19 @@ export class PiA2AServer {
       }
       taskId = referenced.id;
       contextId = referenced.contextId;
+    } else if (extracted.contextId) {
+      const continuable = [...this.#tasks.values()].filter((task) => (
+        task.contextId === extracted.contextId
+        && CONTINUABLE_STATES.has(task.status.state)
+      ));
+      if (continuable.length > 1) {
+        return jsonRpcError(id, -32602, "taskId is required for ambiguous context continuation");
+      }
+      taskId = continuable[0]?.id ?? `task-${randomUUID()}`;
+      contextId = extracted.contextId;
     } else {
       taskId = `task-${randomUUID()}`;
-      contextId = extracted.contextId ?? `ctx-${randomUUID()}`;
+      contextId = `ctx-${randomUUID()}`;
     }
     const controller = new AbortController();
     const workingTask = taskFromExecution({

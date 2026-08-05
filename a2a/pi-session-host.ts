@@ -163,6 +163,13 @@ function canonicalPiSessionDirectory(cwd: string, agentDir: string): string {
   return path.join(path.resolve(agentDir), "sessions", safeCwd);
 }
 
+async function createPrivateDirectoryAfterMissing(directory: string) {
+  await mkdir(directory, { mode: 0o700 }).catch((error) => {
+    if (!isRecord(error) || error.code !== "EEXIST") throw error;
+  });
+  return lstat(directory);
+}
+
 async function ensurePrivateStorageRoot(root: string): Promise<void> {
   const resolvedRoot = path.resolve(root);
   const parsed = path.parse(resolvedRoot);
@@ -174,8 +181,7 @@ async function ensurePrivateStorageRoot(root: string): Promise<void> {
       metadata = await lstat(current);
     } catch (error) {
       if (!isRecord(error) || error.code !== "ENOENT") throw error;
-      await mkdir(current, { mode: 0o700 });
-      metadata = await lstat(current);
+      metadata = await createPrivateDirectoryAfterMissing(current);
     }
     if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
       throw new Error("A2A agent directory path must not contain symbolic links");
@@ -201,8 +207,7 @@ async function ensurePrivateDirectory(root: string, directory: string): Promise<
       metadata = await lstat(current);
     } catch (error) {
       if (!isRecord(error) || error.code !== "ENOENT") throw error;
-      await mkdir(current, { mode: 0o700 });
-      metadata = await lstat(current);
+      metadata = await createPrivateDirectoryAfterMissing(current);
     }
     if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
       throw new Error("A2A storage directories must not contain symbolic links");

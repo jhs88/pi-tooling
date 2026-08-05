@@ -81,6 +81,8 @@ Persistent mappings are not automatically evicted because doing so could silentl
 
 Cancellation, execution timeout, and a disconnected `SendMessage` client abort the underlying Pi SDK session. The single active-turn slot remains occupied until Pi finishes abort cleanup. Inbound child sessions load no package or project extensions, do not expand prompt templates, and exclude orchestration tools.
 
+Hermes-style follow-ups that provide only `contextId` continue the single retained `INPUT_REQUIRED` or `AUTH_REQUIRED` task for that context. An explicit `taskId` is required if retained state is ambiguous, preventing context-only clarification cycles from leaking nonterminal tasks into the bounded task store.
+
 Returned and retained task text is capped at 64 KiB with UTF-8-safe truncation. The complete model response remains in the canonical Pi JSONL session.
 
 ## Verification boundary

@@ -216,6 +216,38 @@ test("SendMessage continues an input-required task by taskId", async (t) => {
   assert.equal((await missing.json()).error.code, -32001);
 });
 
+test("SendMessage continues an unambiguous input-required task by contextId", async (t) => {
+  let executions = 0;
+  const server = createServer({
+    maxTasks: 1,
+    execute: async () => {
+      executions++;
+      return executions === 1
+        ? { state: "TASK_STATE_INPUT_REQUIRED", text: "clarify" }
+        : { state: "TASK_STATE_COMPLETED", text: "done" };
+    },
+  });
+  t.after(() => server.stop());
+  const url = await startOnEphemeralPort(server);
+
+  const firstResponse = await postJson(
+    url,
+    sendMessageRequest("initial", "ctx-context-continuation"),
+  );
+  const firstTask = (await firstResponse.json()).result.task;
+  assert.equal(firstTask.status.state, "TASK_STATE_INPUT_REQUIRED");
+
+  const continuation = await postJson(
+    url,
+    sendMessageRequest("clarification", firstTask.contextId, "context-follow-up"),
+  );
+  const continuedTask = (await continuation.json()).result.task;
+  assert.equal(continuation.status, 200);
+  assert.equal(continuedTask.id, firstTask.id);
+  assert.equal(continuedTask.status.state, "TASK_STATE_COMPLETED");
+  assert.equal(executions, 2);
+});
+
 test("SendMessage rejects continuation of a terminal task", async (t) => {
   const server = createServer();
   t.after(() => server.stop());
