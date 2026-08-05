@@ -7,7 +7,12 @@ export interface A2AServerConfig {
   executionTimeoutMs: number;
 }
 
+export interface A2AHostConfig {
+  maxContexts: number;
+}
+
 export const MAX_A2A_TASKS = 1_024;
+export const MAX_A2A_CONTEXTS = 1_024;
 
 const LOOPBACK_HOSTS = new Set<A2AServerConfig["host"]>([
   "127.0.0.1",
@@ -62,6 +67,19 @@ export function loadA2AServerConfig(
       "PI_A2A_EXECUTION_TIMEOUT_MS",
       env.PI_A2A_EXECUTION_TIMEOUT_MS,
       300_000,
+    ),
+  };
+}
+
+export function loadA2AHostConfig(
+  env: Record<string, string | undefined> = process.env,
+): A2AHostConfig {
+  return {
+    maxContexts: positiveInteger(
+      "PI_A2A_MAX_CONTEXTS",
+      env.PI_A2A_MAX_CONTEXTS,
+      256,
+      MAX_A2A_CONTEXTS,
     ),
   };
 }

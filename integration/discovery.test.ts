@@ -72,9 +72,15 @@ test("the package exposes guidance for its specialized Pi tools as skills", asyn
 test("the package exposes the headless A2A server executable", async () => {
   const manifest = JSON.parse(
     await readFile(join(packageRoot, "package.json"), "utf8"),
-  ) as { bin?: Record<string, string> };
-  assert.equal(manifest.bin?.["pi-a2a-server"], "./a2a/cli.ts");
+  ) as {
+    bin?: Record<string, string>;
+    engines?: Record<string, string>;
+    scripts?: Record<string, string>;
+  };
+  assert.equal(manifest.bin?.["pi-a2a-server"], "./a2a/cli.mjs");
+  assert.equal(manifest.engines?.node, ">=22.19.0");
+  assert.equal(manifest.scripts?.["verify:production"], "node scripts/verify-production-install.mjs");
 
-  const executable = await stat(join(packageRoot, "a2a", "cli.ts"));
+  const executable = await stat(join(packageRoot, "a2a", "cli.mjs"));
   assert.notEqual(executable.mode & 0o111, 0);
 });

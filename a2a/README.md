@@ -41,10 +41,12 @@ From a package checkout that has not been linked or installed into the command p
 
 ```bash
 PI_A2A_BEARER_TOKEN="$(<~/.config/pi-a2a/token)" \
-  /path/to/pi-tooling/a2a/cli.ts
+  /path/to/pi-tooling/a2a/cli.mjs
 ```
 
-The headless process logs its bound URL after startup and handles `SIGINT` and `SIGTERM` with coordinated server and Pi-session shutdown. A service supervisor should invoke the linked command or executable path directly rather than wrapping it in `npm exec`, so signals reach the server process without an intermediate npm shell. Node.js 22.6 or newer is required for the TypeScript executable.
+Use `pi-a2a-server --check` to verify the installed executable can resolve the Pi host runtime without opening a listener. Managed Git packages intentionally keep Pi host packages as peers. The executable resolves that peer from the `pi` command on `PATH`; set `PI_A2A_PI_PACKAGE` to the absolute `@earendil-works/pi-coding-agent` package directory only when the supervisor has a restricted `PATH`.
+
+The headless process logs its bound URL after startup and handles `SIGINT` and `SIGTERM` with coordinated server and Pi-session shutdown. A service supervisor should invoke the linked command or executable path directly rather than wrapping it in `npm exec`, so signals reach the server process without an intermediate npm shell. Node.js 22.19 or newer is required.
 
 The working directory is fixed to the current directory when either server form starts. The initial implementation accepts only loopback hosts and allows one active Pi turn at a time.
 
@@ -57,8 +59,10 @@ The working directory is fixed to the current directory when either server form 
 | `PI_A2A_PORT` | `10000` | 1–65535 |
 | `PI_A2A_MAX_BODY_BYTES` | `1048576` | Hard maximum of 1 MiB |
 | `PI_A2A_MAX_TASKS` | `256` | Integer from 1 through 1024 |
+| `PI_A2A_MAX_CONTEXTS` | `256` | Persistent mappings per workspace; integer from 1 through 1024 |
 | `PI_A2A_EXECUTION_TIMEOUT_MS` | `300000` | Positive integer |
 | `PI_A2A_AUTO_START` | unset | Starts only when exactly `true` |
+| `PI_A2A_PI_PACKAGE` | automatic | Optional absolute Pi host-package directory for headless resolution |
 
 ## Persistence and lifecycle
 
@@ -69,7 +73,9 @@ a2a/contexts.json
 sessions/--encoded-cwd--/*.jsonl
 ```
 
-Sessions use Pi's standard cwd-specific location so existing session ingestion continues to discover them. The directories are restricted to mode `0700`; registry and session files are restricted to `0600`. Symlinked storage directories and symlinked registry/session files fail closed. Mappings are written atomically once Pi has materialized the canonical session file, including failed, canceled, shutdown, or no-assistant turns. Missing, corrupt, escaped, or mismatched session mappings fail closed and are never silently deleted.
+Sessions use Pi's standard cwd-specific location so existing session ingestion continues to discover them. One registry safely retains entries for multiple workspaces, while a context identifier remains bound to its original workspace. The directories are restricted to mode `0700`; registry and session files are restricted to `0600`. Symlinked storage-root chains, registry directories, and registry/session files fail closed. Mappings are written atomically once Pi has materialized the canonical session file, including failed, canceled, shutdown, or no-assistant turns. Missing, corrupt, escaped, or mismatched session mappings fail closed and are never silently deleted.
+
+Persistent mappings are not automatically evicted because doing so could silently detach an A2A context from its canonical Pi conversation. New contexts are rejected when the configured per-workspace capacity is reached. An operator can raise `PI_A2A_MAX_CONTEXTS` up to 1024. If mappings must be retired, stop every A2A server using the agent directory, back up `a2a/contexts.json` and the corresponding canonical JSONL files, then remove only deliberately retired entries before restarting; reusing a retired context identifier starts a new conversation and should therefore be avoided.
 
 Cancellation, execution timeout, and a disconnected `SendMessage` client abort the underlying Pi SDK session. The single active-turn slot remains occupied until Pi finishes abort cleanup. Inbound child sessions load no package or project extensions, do not expand prompt templates, and exclude orchestration tools.
 
@@ -78,5 +84,7 @@ Returned and retained task text is capped at 64 KiB with UTF-8-safe truncation. 
 ## Verification boundary
 
 An A2A `TASK_STATE_COMPLETED` response is not proof that a coding task is correct. Hermes must inspect repository artifacts and run the repository's tests independently. Keep ACP/delegation and Kanban available as fallback coordination paths.
+
+Run `npm run verify:production` from a development checkout to pack the package, install it without development or Pi peer packages, and execute the headless runtime check against the host-provided Pi package.
 
 The bridge does not write Hermes peer configuration. Configure the peer separately only after an isolated real-model validation succeeds.

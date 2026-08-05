@@ -2,6 +2,7 @@ import {
   getAgentDir,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
+import { loadA2AHostConfig } from "./config.ts";
 import { PiSessionHost } from "./pi-session-host.ts";
 import {
   createConfiguredPiA2AServer,
@@ -24,7 +25,11 @@ interface A2AServerHandle {
 export interface A2AExtensionDependencies {
   env: NodeJS.ProcessEnv;
   agentDir: string;
-  createHost(options: { cwd: string; agentDir: string }): A2AHostHandle;
+  createHost(options: {
+    cwd: string;
+    agentDir: string;
+    maxContexts: number;
+  }): A2AHostHandle;
   createServer(
     execute: (input: A2AExecutionInput) => Promise<A2AExecutionResult>,
   ): A2AServerHandle;
@@ -85,7 +90,11 @@ export function createA2ARegistration(
 
     const start = (cwd: string) => serialize(async () => {
       if (running?.server.isRunning) return running;
-      const host = dependencies.createHost({ cwd, agentDir: dependencies.agentDir });
+      const host = dependencies.createHost({
+        cwd,
+        agentDir: dependencies.agentDir,
+        maxContexts: loadA2AHostConfig(dependencies.env).maxContexts,
+      });
       const server = dependencies.createServer((input) => host.execute(input));
       try {
         await server.start();

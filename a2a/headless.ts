@@ -1,4 +1,5 @@
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { loadA2AHostConfig } from "./config.ts";
 import { PiSessionHost } from "./pi-session-host.ts";
 import {
   createConfiguredPiA2AServer,
@@ -19,7 +20,11 @@ interface HeadlessA2AServer {
 }
 
 export interface HeadlessA2ADependencies {
-  createHost(options: { cwd: string; agentDir: string }): HeadlessA2AHost;
+  createHost(options: {
+    cwd: string;
+    agentDir: string;
+    maxContexts: number;
+  }): HeadlessA2AHost;
   createServer(
     execute: (input: A2AExecutionInput) => Promise<A2AExecutionResult>,
     env: NodeJS.ProcessEnv,
@@ -80,7 +85,11 @@ export async function runHeadlessA2AServer(
   const cwd = options.cwd ?? process.cwd();
   const agentDir = options.agentDir ?? getAgentDir();
   const env = options.env ?? process.env;
-  const host = dependencies.createHost({ cwd, agentDir });
+  const host = dependencies.createHost({
+    cwd,
+    agentDir,
+    maxContexts: loadA2AHostConfig(env).maxContexts,
+  });
   let server: HeadlessA2AServer;
   try {
     server = dependencies.createServer((input) => host.execute(input), env);

@@ -226,6 +226,58 @@ test("different A2A contexts create different Pi session files", async () => {
   });
 });
 
+test("one registry preserves contexts from multiple canonical workspaces", async () => {
+  await withFixture(async (fixture) => {
+    const first = fakeFactory();
+    const firstHost = new PiSessionHost({ ...fixture, sessionFactory: first.factory });
+    await firstHost.execute(executionInput("ctx-workspace-one", "one"));
+    await firstHost.close();
+
+    const secondCwd = path.join(fixture.root, "workspace-two");
+    const secondSessionsDir = path.join(fixture.agentDir, "a2a", "sessions-two");
+    await mkdir(secondCwd);
+    const second = fakeFactory();
+    const secondHost = new PiSessionHost({
+      cwd: secondCwd,
+      agentDir: fixture.agentDir,
+      registryPath: fixture.registryPath,
+      sessionsDir: secondSessionsDir,
+      sessionFactory: second.factory,
+    });
+    await secondHost.execute(executionInput("ctx-workspace-two", "two"));
+
+    const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
+    assert.equal(registry.contexts["ctx-workspace-one"].cwd, fixture.cwd);
+    assert.equal(registry.contexts["ctx-workspace-two"].cwd, secondCwd);
+    await secondHost.close();
+  });
+});
+
+test("a context cannot be rebound to a different workspace", async () => {
+  await withFixture(async (fixture) => {
+    const first = fakeFactory();
+    const firstHost = new PiSessionHost({ ...fixture, sessionFactory: first.factory });
+    await firstHost.execute(executionInput("ctx-workspace-collision", "one"));
+    await firstHost.close();
+
+    const secondCwd = path.join(fixture.root, "workspace-two");
+    await mkdir(secondCwd);
+    const second = fakeFactory();
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      cwd: secondCwd,
+      sessionsDir: path.join(fixture.agentDir, "a2a", "sessions-two"),
+      sessionFactory: second.factory,
+    });
+    await assert.rejects(
+      secondHost.execute(executionInput("ctx-workspace-collision", "two")),
+      /belongs to a different workspace/,
+    );
+    assert.equal(second.inputs.length, 0);
+    await secondHost.close();
+  });
+});
+
 test("context capacity is enforced before constructing or prompting a new session", async () => {
   await withFixture(async (fixture) => {
     await mkdir(path.dirname(fixture.registryPath), { recursive: true });
@@ -343,6 +395,22 @@ test("a symlinked registry directory fails closed", async () => {
     await assert.rejects(
       host.execute(executionInput("ctx-root-symlink", "hello")),
       /symbolic link|symlink/i,
+    );
+    assert.equal(fake.inputs.length, 0);
+  });
+});
+
+test("a symlinked Pi agent directory fails closed", async () => {
+  await withFixture(async (fixture) => {
+    const realAgentDir = path.join(fixture.root, "real-agent");
+    await mkdir(realAgentDir);
+    await symlink(realAgentDir, fixture.agentDir);
+    const fake = fakeFactory();
+    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+
+    await assert.rejects(
+      host.execute(executionInput("ctx-agent-root-symlink", "hello")),
+      /agent directory.*symbolic link|storage root.*symbolic link/i,
     );
     assert.equal(fake.inputs.length, 0);
   });

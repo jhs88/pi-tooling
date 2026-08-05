@@ -115,7 +115,7 @@ function assistantResult(messages: readonly unknown[]): A2AExecutionResult {
   throw new Error("Pi session produced no assistant text");
 }
 
-function parseRegistry(raw: string, expectedCwd: string): ContextRegistry {
+function parseRegistry(raw: string): ContextRegistry {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -134,7 +134,9 @@ function parseRegistry(raw: string, expectedCwd: string): ContextRegistry {
       throw new Error("A2A context registry contains an invalid context entry");
     }
     if (
-      value.cwd !== expectedCwd ||
+      typeof value.cwd !== "string" ||
+      !path.isAbsolute(value.cwd) ||
+      path.resolve(value.cwd) !== value.cwd ||
       typeof value.sessionFile !== "string" ||
       !path.isAbsolute(value.sessionFile)
     ) {
@@ -155,6 +157,27 @@ function canonicalPiSessionDirectory(cwd: string, agentDir: string): string {
   return path.join(path.resolve(agentDir), "sessions", safeCwd);
 }
 
+async function ensurePrivateStorageRoot(root: string): Promise<void> {
+  const resolvedRoot = path.resolve(root);
+  const parsed = path.parse(resolvedRoot);
+  let current = parsed.root;
+  for (const segment of resolvedRoot.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    let metadata;
+    try {
+      metadata = await lstat(current);
+    } catch (error) {
+      if (!isRecord(error) || error.code !== "ENOENT") throw error;
+      await mkdir(current, { mode: 0o700 });
+      metadata = await lstat(current);
+    }
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+      throw new Error("A2A agent directory path must not contain symbolic links");
+    }
+  }
+  await chmod(resolvedRoot, 0o700);
+}
+
 async function ensurePrivateDirectory(root: string, directory: string): Promise<void> {
   const resolvedRoot = path.resolve(root);
   const resolvedDirectory = path.resolve(directory);
@@ -163,7 +186,7 @@ async function ensurePrivateDirectory(root: string, directory: string): Promise<
     throw new Error("A2A storage directory escapes the Pi agent directory");
   }
 
-  await mkdir(resolvedRoot, { recursive: true });
+  await ensurePrivateStorageRoot(resolvedRoot);
   let current = resolvedRoot;
   for (const segment of relative.split(path.sep)) {
     current = path.join(current, segment);
@@ -434,8 +457,10 @@ export class PiSessionHost {
     const raw = await readFile(this.#registryPath, "utf8").catch((error) => {
       throw new Error("Unable to read A2A context registry", { cause: error });
     });
-    const registry = parseRegistry(raw, this.#cwd);
-    if (Object.keys(registry.contexts).length > this.#maxContexts) {
+    const registry = parseRegistry(raw);
+    const workspaceContextCount = Object.values(registry.contexts)
+      .filter((entry) => entry.cwd === this.#cwd).length;
+    if (workspaceContextCount > this.#maxContexts) {
       throw new Error("A2A context registry exceeds the configured limit");
     }
     this.#registry = registry;
@@ -448,8 +473,13 @@ export class PiSessionHost {
 
     const registry = await this.#loadRegistry();
     const mapped = registry.contexts[contextId];
+    if (mapped && mapped.cwd !== this.#cwd) {
+      throw new Error("A2A context belongs to a different workspace");
+    }
     const knownContexts = new Set([
-      ...Object.keys(registry.contexts),
+      ...Object.entries(registry.contexts)
+        .filter(([, entry]) => entry.cwd === this.#cwd)
+        .map(([id]) => id),
       ...this.#sessions.keys(),
     ]);
     if (!mapped && knownContexts.size >= this.#maxContexts) {
@@ -493,8 +523,16 @@ export class PiSessionHost {
     session: HostedPiSession,
   ): Promise<void> {
     const registry = await this.#loadRegistry();
-    if (registry.contexts[contextId]) return;
-    if (Object.keys(registry.contexts).length >= this.#maxContexts) {
+    const existing = registry.contexts[contextId];
+    if (existing) {
+      if (existing.cwd !== this.#cwd) {
+        throw new Error("A2A context belongs to a different workspace");
+      }
+      return;
+    }
+    const workspaceContextCount = Object.values(registry.contexts)
+      .filter((entry) => entry.cwd === this.#cwd).length;
+    if (workspaceContextCount >= this.#maxContexts) {
       throw new Error("A2A context capacity reached");
     }
     const canonicalFile = await validateSessionFile(

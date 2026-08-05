@@ -10,7 +10,7 @@ import {
   type A2AExtensionDependencies,
 } from "./index.ts";
 
-function fixture(autoStart = false, cliStart = false) {
+function fixture(autoStart = false, cliStart = false, maxContexts?: string) {
   const eventHandlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   const commands = new Map<
     string,
@@ -22,13 +22,18 @@ function fixture(autoStart = false, cliStart = false) {
   let stops = 0;
   let closes = 0;
   let executeCalls = 0;
+  let createdMaxContexts: number | undefined;
 
   const dependencies: A2AExtensionDependencies = {
-    env: autoStart ? { PI_A2A_AUTO_START: "true" } : {},
+    env: {
+      ...(autoStart ? { PI_A2A_AUTO_START: "true" } : {}),
+      ...(maxContexts ? { PI_A2A_MAX_CONTEXTS: maxContexts } : {}),
+    },
     agentDir: "/fixture/agent",
     createHost(options) {
       assert.equal(options.agentDir, "/fixture/agent");
       assert.equal(options.cwd, "/fixture/workspace");
+      createdMaxContexts = options.maxContexts;
       return {
         async execute() {
           executeCalls++;
@@ -113,6 +118,9 @@ function fixture(autoStart = false, cliStart = false) {
       get executeCalls() {
         return executeCalls;
       },
+      get createdMaxContexts() {
+        return createdMaxContexts;
+      },
     },
   };
 }
@@ -161,9 +169,10 @@ test("auto-start requires an explicit flag and session shutdown closes the host"
 });
 
 test("the --a2a-server CLI flag starts the listener on session startup", async () => {
-  const app = fixture(false, true);
+  const app = fixture(false, true, "512");
   await app.eventHandlers.get("session_start")!({}, app.context);
   assert.equal(app.counts.starts, 1);
+  assert.equal(app.counts.createdMaxContexts, 512);
   assert.equal(
     app.notifications.some(({ message }) => message.includes("http://127.0.0.1:10000")),
     true,
