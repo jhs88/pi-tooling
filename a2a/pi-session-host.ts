@@ -234,11 +234,13 @@ type RegistryLockRelease = () => Promise<void>;
 async function acquireRegistryLock(
   agentDir: string,
   registryPath: string,
+  signal?: AbortSignal,
 ): Promise<RegistryLockRelease> {
   const lockPath = `${registryPath}.lock`;
   await ensurePrivateDirectory(agentDir, path.dirname(lockPath));
   let lockIdentity: { dev: bigint; ino: bigint } | undefined;
   for (let attempt = 0; attempt < REGISTRY_LOCK_ATTEMPTS; attempt++) {
+    if (signal?.aborted) throw abortError(signal);
     try {
       await mkdir(lockPath, { mode: 0o700 });
       const metadata = await lstat(lockPath, { bigint: true });
@@ -256,7 +258,20 @@ async function acquireRegistryLock(
       if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
         throw new Error("A2A context registry lock must be a private directory");
       }
-      await new Promise((resolve) => setTimeout(resolve, REGISTRY_LOCK_RETRY_MS));
+      await new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(abortError(signal!));
+        };
+        const timer = setTimeout(() => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve();
+        }, REGISTRY_LOCK_RETRY_MS);
+        if (signal) {
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        }
+      });
     }
   }
   if (!lockIdentity) {
@@ -266,7 +281,7 @@ async function acquireRegistryLock(
   }
 
   let releasePromise: Promise<void> | undefined;
-  return () => {
+  const release = () => {
     releasePromise ??= (async () => {
       const metadata = await lstat(lockPath, { bigint: true }).catch((error) => {
         throw new Error("A2A context registry lock disappeared unexpectedly", { cause: error });
@@ -283,6 +298,11 @@ async function acquireRegistryLock(
     })();
     return releasePromise;
   };
+  if (signal?.aborted) {
+    await release();
+    throw abortError(signal);
+  }
+  return release;
 }
 
 async function withRegistryLock<T>(
@@ -402,6 +422,7 @@ export class PiSessionHost {
   readonly #sessionFactory: PiSessionFactory;
   readonly #sessions = new Map<string, HostedPiSession>();
   readonly #initializationLocks = new Map<string, RegistryLockRelease>();
+  readonly #closeController = new AbortController();
   #active = false;
   #activeSession: HostedPiSession | undefined;
   #activeDone: Promise<void> | undefined;
@@ -440,7 +461,8 @@ export class PiSessionHost {
     let onAbort: (() => void) | undefined;
     let abortPromise: Promise<void> | undefined;
     try {
-      session = await this.#sessionFor(input.contextId);
+      const setupSignal = AbortSignal.any([input.signal, this.#closeController.signal]);
+      session = await this.#sessionFor(input.contextId, setupSignal);
       this.#activeSession = session;
       if (this.#closed) {
         await this.#rememberContextIfPersisted(input.contextId, session);
@@ -501,6 +523,7 @@ export class PiSessionHost {
   close(): Promise<void> {
     if (this.#closePromise) return this.#closePromise;
     this.#closed = true;
+    this.#closeController.abort(new Error("Pi session host is closed"));
     this.#closePromise = (async () => {
       await this.#activeSession?.abort().catch(() => {});
       await this.#activeDone;
@@ -540,11 +563,12 @@ export class PiSessionHost {
     return registry;
   }
 
-  async #sessionFor(contextId: string): Promise<HostedPiSession> {
+  async #sessionFor(contextId: string, signal: AbortSignal): Promise<HostedPiSession> {
+    if (signal.aborted) throw abortError(signal);
     const cached = this.#sessions.get(contextId);
     if (cached) return cached;
 
-    const release = await acquireRegistryLock(this.#agentDir, this.#registryPath);
+    const release = await acquireRegistryLock(this.#agentDir, this.#registryPath, signal);
     let holdsInitializationLock = false;
     try {
       const registry = await this.#loadRegistry();
@@ -567,6 +591,7 @@ export class PiSessionHost {
         this.#initializationLocks.set(contextId, release);
         holdsInitializationLock = true;
       }
+      if (signal.aborted) throw abortError(signal);
       await ensurePrivateDirectory(this.#agentDir, this.#sessionsDir);
       const sessionFile = mapped
         ? await validateSessionFile(

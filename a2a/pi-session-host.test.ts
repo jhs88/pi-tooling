@@ -377,6 +377,85 @@ test("concurrent capacity is enforced before constructing a second session", asy
   });
 });
 
+test("abort while waiting for context initialization never constructs a session", async () => {
+  await withFixture(async (fixture) => {
+    const firstEntered = deferred();
+    const firstRelease = deferred();
+    const first = fakeFactory();
+    const second = fakeFactory();
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        firstEntered.resolve();
+        await firstRelease.promise;
+        return first.factory(input);
+      },
+    });
+    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+    const firstRun = firstHost.execute(executionInput("ctx-lock-owner", "one"));
+    await firstEntered.promise;
+
+    const abortController = new AbortController();
+    const abortReason = new Error("cancel lock wait");
+    const secondRun = secondHost.execute(
+      executionInput("ctx-lock-waiter", "two", abortController.signal),
+    );
+    abortController.abort(abortReason);
+    const earlyOutcome = await Promise.race([
+      secondRun.then(
+        () => "fulfilled" as const,
+        (error) => error,
+      ),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 50)),
+    ]);
+    firstRelease.resolve();
+    await firstRun;
+    await secondRun.catch(() => {});
+
+    assert.equal(earlyOutcome, abortReason);
+    assert.equal(second.inputs.length, 0);
+    await Promise.all([firstHost.close(), secondHost.close()]);
+  });
+});
+
+test("host close interrupts a pending context-initialization lock wait", async () => {
+  await withFixture(async (fixture) => {
+    const firstEntered = deferred();
+    const firstRelease = deferred();
+    const first = fakeFactory();
+    const second = fakeFactory();
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        firstEntered.resolve();
+        await firstRelease.promise;
+        return first.factory(input);
+      },
+    });
+    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+    const firstRun = firstHost.execute(executionInput("ctx-close-owner", "one"));
+    await firstEntered.promise;
+    const secondRun = secondHost.execute(executionInput("ctx-close-waiter", "two"));
+    const secondOutcome = secondRun.then(
+      () => undefined,
+      (error) => error,
+    );
+
+    const closeOutcome = Promise.race([
+      secondHost.close().then(() => "closed" as const),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 50)),
+    ]);
+    const earlyOutcome = await closeOutcome;
+    firstRelease.resolve();
+    await firstRun;
+    assert.match(String(await secondOutcome), /host is closed/);
+
+    assert.equal(earlyOutcome, "closed");
+    assert.equal(second.inputs.length, 0);
+    await firstHost.close();
+  });
+});
+
 test("a context cannot be rebound to a different workspace", async () => {
   await withFixture(async (fixture) => {
     const first = fakeFactory();
@@ -589,12 +668,14 @@ test("a session symlink in the registry fails closed", async () => {
 
 test("host close waits for in-flight session creation and closes the late session", async () => {
   await withFixture(async (fixture) => {
+    const factoryEntered = deferred();
     let releaseFactory!: () => void;
     const factoryReady = new Promise<void>((resolve) => { releaseFactory = resolve; });
     let promptCalls = 0;
     let closeCalls = 0;
     const sessionFile = path.join(fixture.sessionsDir, "late.jsonl");
     const factory: PiSessionFactory = async () => {
+      factoryEntered.resolve();
       await factoryReady;
       await writeFile(sessionFile, '{"type":"session"}\n', { mode: 0o600 });
       return {
@@ -607,6 +688,7 @@ test("host close waits for in-flight session creation and closes the late sessio
     };
     const host = new PiSessionHost({ ...fixture, sessionFactory: factory });
     const execution = host.execute(executionInput("ctx-close-setup", "wait"));
+    await factoryEntered.promise;
     const closing = host.close();
 
     releaseFactory();
@@ -656,12 +738,14 @@ test("host close aborts an active prompt and preserves its canonical mapping", a
 
 test("an abort during session setup never starts the Pi prompt", async () => {
   await withFixture(async (fixture) => {
+    const factoryEntered = deferred();
     let releaseFactory!: () => void;
     const factoryReady = new Promise<void>((resolve) => { releaseFactory = resolve; });
     let promptCalls = 0;
     let abortCalls = 0;
     const sessionFile = path.join(fixture.sessionsDir, "setup-abort.jsonl");
     const factory: PiSessionFactory = async (input) => {
+      factoryEntered.resolve();
       await factoryReady;
       await mkdir(input.sessionsDir, { recursive: true });
       await writeFile(sessionFile, '{"type":"session"}\n', { mode: 0o600 });
@@ -677,6 +761,7 @@ test("an abort during session setup never starts the Pi prompt", async () => {
     const controller = new AbortController();
     const execution = host.execute(executionInput("ctx-setup-abort", "wait", controller.signal));
 
+    await factoryEntered.promise;
     controller.abort(new Error("cancel during setup"));
     releaseFactory();
     await assert.rejects(execution, /cancel during setup/);
