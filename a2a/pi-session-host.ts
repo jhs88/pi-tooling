@@ -229,11 +229,12 @@ async function writeRegistryAtomic(
   }
 }
 
-async function withRegistryLock<T>(
+type RegistryLockRelease = () => Promise<void>;
+
+async function acquireRegistryLock(
   agentDir: string,
   registryPath: string,
-  run: () => Promise<T>,
-): Promise<T> {
+): Promise<RegistryLockRelease> {
   const lockPath = `${registryPath}.lock`;
   await ensurePrivateDirectory(agentDir, path.dirname(lockPath));
   let lockIdentity: { dev: bigint; ino: bigint } | undefined;
@@ -264,21 +265,36 @@ async function withRegistryLock<T>(
     );
   }
 
+  let releasePromise: Promise<void> | undefined;
+  return () => {
+    releasePromise ??= (async () => {
+      const metadata = await lstat(lockPath, { bigint: true }).catch((error) => {
+        throw new Error("A2A context registry lock disappeared unexpectedly", { cause: error });
+      });
+      if (
+        !metadata.isDirectory()
+        || metadata.isSymbolicLink()
+        || metadata.dev !== lockIdentity.dev
+        || metadata.ino !== lockIdentity.ino
+      ) {
+        throw new Error("A2A context registry lock changed unexpectedly");
+      }
+      await rmdir(lockPath);
+    })();
+    return releasePromise;
+  };
+}
+
+async function withRegistryLock<T>(
+  agentDir: string,
+  registryPath: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const release = await acquireRegistryLock(agentDir, registryPath);
   try {
     return await run();
   } finally {
-    const metadata = await lstat(lockPath, { bigint: true }).catch((error) => {
-      throw new Error("A2A context registry lock disappeared unexpectedly", { cause: error });
-    });
-    if (
-      !metadata.isDirectory()
-      || metadata.isSymbolicLink()
-      || metadata.dev !== lockIdentity.dev
-      || metadata.ino !== lockIdentity.ino
-    ) {
-      throw new Error("A2A context registry lock changed unexpectedly");
-    }
-    await rmdir(lockPath);
+    await release();
   }
 }
 
@@ -385,6 +401,7 @@ export class PiSessionHost {
   readonly #maxContexts: number;
   readonly #sessionFactory: PiSessionFactory;
   readonly #sessions = new Map<string, HostedPiSession>();
+  readonly #initializationLocks = new Map<string, RegistryLockRelease>();
   #active = false;
   #activeSession: HostedPiSession | undefined;
   #activeDone: Promise<void> | undefined;
@@ -467,13 +484,17 @@ export class PiSessionHost {
       const result = assistantResult(session.messages.slice(messageStart));
       return result;
     } finally {
-      if (session && onAbort) {
-        input.signal.removeEventListener("abort", onAbort);
+      try {
+        await this.#releaseInitializationLock(input.contextId);
+      } finally {
+        if (session && onAbort) {
+          input.signal.removeEventListener("abort", onAbort);
+        }
+        this.#activeSession = undefined;
+        this.#active = false;
+        resolveActive();
+        if (this.#activeDone === activeDone) this.#activeDone = undefined;
       }
-      this.#activeSession = undefined;
-      this.#active = false;
-      resolveActive();
-      if (this.#activeDone === activeDone) this.#activeDone = undefined;
     }
   }
 
@@ -523,49 +544,66 @@ export class PiSessionHost {
     const cached = this.#sessions.get(contextId);
     if (cached) return cached;
 
-    const registry = await this.#loadRegistry();
-    const mapped = registry.contexts[contextId];
-    if (mapped && mapped.cwd !== this.#cwd) {
-      throw new Error("A2A context belongs to a different workspace");
-    }
-    const knownContexts = new Set([
-      ...Object.entries(registry.contexts)
-        .filter(([, entry]) => entry.cwd === this.#cwd)
-        .map(([id]) => id),
-      ...this.#sessions.keys(),
-    ]);
-    if (!mapped && knownContexts.size >= this.#maxContexts) {
-      throw new Error("A2A context capacity reached");
-    }
-    await ensurePrivateDirectory(this.#agentDir, this.#sessionsDir);
-    const sessionFile = mapped
-      ? await validateSessionFile(
-          this.#agentDir,
-          this.#sessionsDir,
-          mapped.sessionFile,
-        )
-      : undefined;
-    if (sessionFile) await chmod(sessionFile, 0o600);
-    const session = await this.#sessionFactory({
-      contextId,
-      cwd: this.#cwd,
-      agentDir: this.#agentDir,
-      sessionsDir: this.#sessionsDir,
-      ...(sessionFile ? { sessionFile } : {}),
-    });
-
+    const release = await acquireRegistryLock(this.#agentDir, this.#registryPath);
+    let holdsInitializationLock = false;
     try {
-      const candidateFile = validateSessionPathCandidate(
-        this.#sessionsDir,
-        session.sessionFile ?? "",
-      );
-      if (mapped && candidateFile !== sessionFile) {
-        throw new Error("Reopened Pi session path does not match its registry mapping");
+      const registry = await this.#loadRegistry();
+      const mapped = registry.contexts[contextId];
+      if (mapped && mapped.cwd !== this.#cwd) {
+        throw new Error("A2A context belongs to a different workspace");
       }
-      this.#sessions.set(contextId, session);
-      return session;
+      const knownContexts = new Set([
+        ...Object.entries(registry.contexts)
+          .filter(([, entry]) => entry.cwd === this.#cwd)
+          .map(([id]) => id),
+        ...this.#sessions.keys(),
+      ]);
+      if (!mapped && knownContexts.size >= this.#maxContexts) {
+        throw new Error("A2A context capacity reached");
+      }
+      if (mapped) {
+        await release();
+      } else {
+        this.#initializationLocks.set(contextId, release);
+        holdsInitializationLock = true;
+      }
+      await ensurePrivateDirectory(this.#agentDir, this.#sessionsDir);
+      const sessionFile = mapped
+        ? await validateSessionFile(
+            this.#agentDir,
+            this.#sessionsDir,
+            mapped.sessionFile,
+          )
+        : undefined;
+      if (sessionFile) await chmod(sessionFile, 0o600);
+      const session = await this.#sessionFactory({
+        contextId,
+        cwd: this.#cwd,
+        agentDir: this.#agentDir,
+        sessionsDir: this.#sessionsDir,
+        ...(sessionFile ? { sessionFile } : {}),
+      });
+
+      try {
+        const candidateFile = validateSessionPathCandidate(
+          this.#sessionsDir,
+          session.sessionFile ?? "",
+        );
+        if (mapped && candidateFile !== sessionFile) {
+          throw new Error("Reopened Pi session path does not match its registry mapping");
+        }
+        this.#sessions.set(contextId, session);
+        return session;
+      } catch (error) {
+        await session.close().catch(() => {});
+        throw error;
+      }
     } catch (error) {
-      await session.close().catch(() => {});
+      if (holdsInitializationLock) {
+        await this.#releaseInitializationLock(contextId);
+      } else {
+        await release();
+      }
       throw error;
     }
   }
@@ -580,7 +618,7 @@ export class PiSessionHost {
       session.sessionFile ?? "",
     );
     await chmod(canonicalFile, 0o600);
-    await withRegistryLock(this.#agentDir, this.#registryPath, async () => {
+    await this.#withContextRegistryLock(contextId, async () => {
       const registry = await this.#loadRegistry();
       const existing = registry.contexts[contextId];
       if (existing) {
@@ -603,6 +641,28 @@ export class PiSessionHost {
       };
       await writeRegistryAtomic(this.#agentDir, this.#registryPath, registry);
     });
+  }
+
+  async #withContextRegistryLock<T>(
+    contextId: string,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const held = this.#initializationLocks.get(contextId);
+    if (!held) {
+      return withRegistryLock(this.#agentDir, this.#registryPath, run);
+    }
+    try {
+      return await run();
+    } finally {
+      await this.#releaseInitializationLock(contextId);
+    }
+  }
+
+  async #releaseInitializationLock(contextId: string): Promise<void> {
+    const release = this.#initializationLocks.get(contextId);
+    if (!release) return;
+    this.#initializationLocks.delete(contextId);
+    await release();
   }
 
   async #rememberContextIfPersisted(

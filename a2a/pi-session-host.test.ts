@@ -50,6 +50,14 @@ function executionInput(
   };
 }
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 interface FakeSession extends HostedPiSession {
   prompts: string[];
   abortCalls: number;
@@ -255,13 +263,6 @@ test("one registry preserves contexts from multiple canonical workspaces", async
 
 test("concurrent workspace hosts do not lose each other's registry mappings", async () => {
   await withFixture(async (fixture) => {
-    const deferred = () => {
-      let resolve!: () => void;
-      const promise = new Promise<void>((settle) => {
-        resolve = settle;
-      });
-      return { promise, resolve };
-    };
     const firstEntered = deferred();
     const firstRelease = deferred();
     const secondEntered = deferred();
@@ -292,15 +293,86 @@ test("concurrent workspace hosts do not lose each other's registry mappings", as
     const firstRun = firstHost.execute(executionInput("ctx-concurrent-one", "one"));
     await firstEntered.promise;
     const secondRun = secondHost.execute(executionInput("ctx-concurrent-two", "two"));
-    await secondEntered.promise;
+    const secondFactoryState = await Promise.race([
+      secondEntered.promise.then(() => "entered" as const),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 25)),
+    ]);
+    assert.equal(secondFactoryState, "blocked");
     firstRelease.resolve();
     await firstRun;
+    await secondEntered.promise;
     secondRelease.resolve();
     await secondRun;
 
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
     assert.equal(registry.contexts["ctx-concurrent-one"].cwd, fixture.cwd);
     assert.equal(registry.contexts["ctx-concurrent-two"].cwd, secondCwd);
+    await Promise.all([firstHost.close(), secondHost.close()]);
+  });
+});
+
+test("concurrent creation of one context reopens the first canonical session", async () => {
+  await withFixture(async (fixture) => {
+    const firstEntered = deferred();
+    const firstRelease = deferred();
+    const first = fakeFactory();
+    const second = fakeFactory();
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        firstEntered.resolve();
+        await firstRelease.promise;
+        return first.factory(input);
+      },
+    });
+    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+
+    const firstRun = firstHost.execute(executionInput("ctx-concurrent-shared", "one"));
+    await firstEntered.promise;
+    const secondRun = secondHost.execute(executionInput("ctx-concurrent-shared", "two"));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(second.inputs.length, 0);
+    firstRelease.resolve();
+    await Promise.all([firstRun, secondRun]);
+
+    assert.equal(second.inputs.length, 1);
+    assert.equal(second.inputs[0].sessionFile, first.sessions[0].sessionFile);
+    const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
+    assert.deepEqual(Object.keys(registry.contexts), ["ctx-concurrent-shared"]);
+    await Promise.all([firstHost.close(), secondHost.close()]);
+  });
+});
+
+test("concurrent capacity is enforced before constructing a second session", async () => {
+  await withFixture(async (fixture) => {
+    const firstEntered = deferred();
+    const firstRelease = deferred();
+    const first = fakeFactory();
+    const second = fakeFactory();
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      maxContexts: 1,
+      sessionFactory: async (input) => {
+        firstEntered.resolve();
+        await firstRelease.promise;
+        return first.factory(input);
+      },
+    });
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      maxContexts: 1,
+      sessionFactory: second.factory,
+    });
+
+    const firstRun = firstHost.execute(executionInput("ctx-capacity-first", "one"));
+    await firstEntered.promise;
+    const secondRun = secondHost.execute(executionInput("ctx-capacity-second", "two"));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(second.inputs.length, 0);
+    firstRelease.resolve();
+    await firstRun;
+    await assert.rejects(secondRun, /capacity reached/);
+    assert.equal(second.inputs.length, 0);
     await Promise.all([firstHost.close(), secondHost.close()]);
   });
 });
