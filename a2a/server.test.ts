@@ -69,6 +69,40 @@ test("server startup waits for an in-flight stop", async () => {
   await server.stop();
 });
 
+test("a final stop is ordered after a restart queued during shutdown", async (t) => {
+  let startedResolve!: () => void;
+  const started = new Promise<void>((resolve) => { startedResolve = resolve; });
+  let abortingResolve!: () => void;
+  const aborting = new Promise<void>((resolve) => { abortingResolve = resolve; });
+  let releaseCleanup!: () => void;
+  const cleanup = new Promise<void>((resolve) => { releaseCleanup = resolve; });
+  const server = createServer({
+    execute: async ({ signal }) => {
+      startedResolve();
+      await new Promise<void>((resolve) => {
+        signal.addEventListener("abort", () => {
+          abortingResolve();
+          void cleanup.then(resolve);
+        }, { once: true });
+      });
+      return { state: "TASK_STATE_CANCELED", text: "canceled" };
+    },
+  });
+  t.after(() => server.stop());
+  const url = await startOnEphemeralPort(server);
+  const request = postJson(url, sendMessageRequest("hold", "ctx-lifecycle-order"));
+  await started;
+
+  const stopping = server.stop();
+  await aborting;
+  const restarting = server.start();
+  const finalStop = server.stop();
+  releaseCleanup();
+  await Promise.allSettled([request, stopping, restarting, finalStop]);
+
+  assert.equal(server.isRunning(), false);
+});
+
 test("server exposes an authenticated canonical Agent Card without wildcard CORS", async (t) => {
   const server = createServer();
   t.after(() => server.stop());

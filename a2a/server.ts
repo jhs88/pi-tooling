@@ -121,8 +121,8 @@ export class PiA2AServer {
   readonly #requestControllers = new Set<AbortController>();
   #server: http.Server | null = null;
   #stopping = false;
-  #startPromise: Promise<void> | undefined;
-  #stopPromise: Promise<void> | undefined;
+  #requestedRunning = false;
+  #lifecycle = Promise.resolve();
 
   constructor(options: PiA2AServerOptions) {
     if (!LOOPBACK_HOSTS.has(options.host)) {
@@ -153,10 +153,15 @@ export class PiA2AServer {
   }
 
   start(): Promise<void> {
-    if (this.#stopPromise) return this.#stopPromise.then(() => this.start());
-    if (this.#startPromise) return this.#startPromise;
-    if (this.#server) return Promise.reject(new Error("A2A server is already running"));
-    this.#stopping = false;
+    this.#requestedRunning = true;
+    return this.#enqueueLifecycle(async () => {
+      if (this.#server?.listening) return;
+      await this.#startServer();
+    });
+  }
+
+  async #startServer(): Promise<void> {
+    this.#stopping = !this.#requestedRunning;
     const server = http.createServer((req, res) => {
       void this.#handleRequest(req, res);
     });
@@ -176,16 +181,8 @@ export class PiA2AServer {
       server.once("listening", onListening);
       server.listen(this.#options.port, this.#options.host);
     });
-    this.#startPromise = starting;
-    void starting.then(
-      () => {
-        if (this.#startPromise === starting) this.#startPromise = undefined;
-      },
-      () => {
-        if (this.#startPromise === starting) this.#startPromise = undefined;
-      },
-    );
-    return starting;
+    await starting;
+    this.#stopping = !this.#requestedRunning;
   }
 
   address(): AddressInfo | string | null {
@@ -197,33 +194,21 @@ export class PiA2AServer {
   }
 
   stop(): Promise<void> {
-    if (this.#stopPromise) return this.#stopPromise;
-    if (!this.#server && !this.#startPromise) return Promise.resolve();
+    this.#requestedRunning = false;
     this.#stopping = true;
-    const stopping = this.#stopServer();
-    this.#stopPromise = stopping;
-    void stopping.then(
-      () => {
-        if (this.#stopPromise === stopping) this.#stopPromise = undefined;
-      },
-      () => {
-        if (this.#stopPromise === stopping) this.#stopPromise = undefined;
-      },
-    );
-    return stopping;
+    return this.#enqueueLifecycle(() => this.#stopServer());
+  }
+
+  #enqueueLifecycle(run: () => Promise<void>): Promise<void> {
+    const operation = this.#lifecycle.then(run);
+    this.#lifecycle = operation.catch(() => {});
+    return operation;
   }
 
   async #stopServer(): Promise<void> {
-    const starting = this.#startPromise;
-    if (starting) {
-      try {
-        await starting;
-      } catch {
-        return;
-      }
-    }
     const server = this.#server;
     if (!server) return;
+    this.#stopping = true;
     const closing = new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
     });
@@ -233,8 +218,11 @@ export class PiA2AServer {
     for (const controller of this.#controllers.values()) controller.abort();
     await Promise.allSettled([...this.#executionSettlements.values()]);
     server.closeAllConnections();
-    await closing;
-    this.#server = null;
+    try {
+      await closing;
+    } finally {
+      if (this.#server === server) this.#server = null;
+    }
   }
 
   #isAuthenticated(req: http.IncomingMessage): boolean {
