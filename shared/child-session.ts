@@ -25,6 +25,9 @@ export const CHILD_EXCLUDED_TOOL_NAMES = [
   "subagent_list",
   "workflow",
   "ask_user",
+  "a2a_call",
+  "a2a_parallel",
+  "a2a_orchestrate",
   // Session-scoped background process orchestration tools.
   "bg_start",
   "bg_status",
@@ -42,6 +45,7 @@ export interface ChildResourceOptions {
   projectTrusted: boolean;
   appendSystemPrompt?: string[];
   agentDir?: string;
+  noExtensions?: boolean;
 }
 
 /** Load normal global/package resources and trust-gated project resources. */
@@ -54,6 +58,7 @@ export async function createChildResources(options: ChildResourceOptions) {
     cwd: options.cwd,
     agentDir,
     settingsManager,
+    noExtensions: options.noExtensions,
     ...(options.appendSystemPrompt
       ? { appendSystemPrompt: options.appendSystemPrompt }
       : {}),
@@ -63,7 +68,7 @@ export async function createChildResources(options: ChildResourceOptions) {
 }
 
 /**
- * Build the canonical Pi 0.80.10 model/auth runtime for a child session.
+ * Build the canonical Pi 0.83.0 model/auth runtime for a child session.
  * Catalog refresh is local-only; provider requests made later by the child are
  * unaffected. A fresh runtime per child avoids cross-session provider mutation.
  */

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,7 @@ test("the package extension loads without registration conflicts", async () => {
   assert.deepEqual(result.errors, []);
 
   const registrations = new Map<string, string[]>();
+  const commands = new Map<string, string[]>();
   const sources = await productionSources(packageRoot);
   for (const sourcePath of sources) {
     const source = await readFile(sourcePath, "utf8");
@@ -35,11 +36,20 @@ test("the package extension loads without registration conflicts", async () => {
       const name = match[1];
       registrations.set(name, [...(registrations.get(name) ?? []), sourcePath]);
     }
+    for (const match of source.matchAll(/registerCommand\s*\(\s*["']([^"']+)["']/g)) {
+      const name = match[1];
+      commands.set(name, [...(commands.get(name) ?? []), sourcePath]);
+    }
   }
   const duplicates = [...registrations]
     .filter(([, registeredBy]) => registeredBy.length > 1)
     .map(([name, registeredBy]) => ({ name, registeredBy }));
   assert.deepEqual(duplicates, []);
+  const duplicateCommands = [...commands]
+    .filter(([, registeredBy]) => registeredBy.length > 1)
+    .map(([name, registeredBy]) => ({ name, registeredBy }));
+  assert.deepEqual(duplicateCommands, []);
+  assert.equal(commands.get("a2a-server")?.length, 1);
 });
 
 test("the package exposes guidance for its specialized Pi tools as skills", async () => {
@@ -57,4 +67,20 @@ test("the package exposes guidance for its specialized Pi tools as skills", asyn
     "background-terminals",
     "workflows",
   ]);
+});
+
+test("the package exposes the headless A2A server executable", async () => {
+  const manifest = JSON.parse(
+    await readFile(join(packageRoot, "package.json"), "utf8"),
+  ) as {
+    bin?: Record<string, string>;
+    engines?: Record<string, string>;
+    scripts?: Record<string, string>;
+  };
+  assert.equal(manifest.bin?.["pi-a2a-server"], "./a2a/cli.mjs");
+  assert.equal(manifest.engines?.node, ">=22.19.0");
+  assert.equal(manifest.scripts?.["verify:production"], "node scripts/verify-production-install.mjs");
+
+  const executable = await stat(join(packageRoot, "a2a", "cli.mjs"));
+  assert.notEqual(executable.mode & 0o111, 0);
 });

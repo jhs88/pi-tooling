@@ -22,7 +22,7 @@ It also bundles `background-terminals` and `workflows` skills so Pi receives ope
 - Node.js and npm available to Pi's package manager
 - A self-hosted Firecrawl endpoint if the web-research tools will be used
 
-Development and compatibility checks currently use `@earendil-works/pi-coding-agent` 0.80.10.
+Development and compatibility checks currently use `@earendil-works/pi-coding-agent` 0.83.0.
 
 ## Install
 

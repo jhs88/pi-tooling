@@ -114,6 +114,9 @@ test("child denylist keeps extension and workflow structured tools available", a
         "subagent_list",
         "workflow",
         "ask_user",
+        "a2a_call",
+        "a2a_parallel",
+        "a2a_orchestrate",
         "bg_start",
         "bg_status",
         "bg_list",
@@ -196,6 +199,30 @@ test("resource loading gates project extensions but retains global extensions", 
       .extensions.flatMap((extension) => [...extension.tools.keys()]);
     assert.equal(trustedTools.includes("global_fixture"), true);
     assert.equal(trustedTools.includes("project_fixture"), true);
+  });
+});
+
+test("child resources can disable all extensions for isolated A2A sessions", async () => {
+  await withTempDir(async (directory) => {
+    const cwd = path.join(directory, "project");
+    const agentDir = path.join(directory, "agent");
+    await mkdir(cwd, { recursive: true });
+    await mkdir(path.join(agentDir, "extensions"), { recursive: true });
+    await writeFile(
+      path.join(agentDir, "extensions", "global.ts"),
+      `export default function (pi) {
+        pi.registerCommand("recursive", { handler() {} });
+      }`,
+    );
+
+    const resources = await createChildResources({
+      cwd,
+      agentDir,
+      projectTrusted: false,
+      noExtensions: true,
+    });
+
+    assert.equal(resources.loader.getExtensions().extensions.length, 0);
   });
 });
 
