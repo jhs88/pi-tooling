@@ -496,6 +496,77 @@ test("unmaterialized session cleanup finishes before a competing host acquires t
   });
 });
 
+test("registry persistence failure cleans the transient session before releasing its lock", async () => {
+  await withFixture(async (fixture) => {
+    const closeEntered = deferred();
+    const closeRelease = deferred();
+    const failedSessionFile = path.join(fixture.sessionsDir, "registry-persistence-failure.jsonl");
+    let closeCalls = 0;
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async () => {
+        const messages: unknown[] = [];
+        return {
+          sessionFile: failedSessionFile,
+          messages,
+          async prompt() {
+            await mkdir(fixture.sessionsDir, { recursive: true });
+            await writeFile(failedSessionFile, '{"type":"session"}\n', { mode: 0o600 });
+            messages.push({ role: "assistant", content: [{ type: "text", text: "done" }] });
+            await mkdir(fixture.registryPath);
+          },
+          async abort() {},
+          async close() {
+            closeCalls++;
+            await rm(fixture.registryPath, { recursive: true, force: true });
+            closeEntered.resolve();
+            await closeRelease.promise;
+          },
+        };
+      },
+    });
+    const secondEntered = deferred();
+    const second = fakeFactory();
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        secondEntered.resolve();
+        return second.factory(input);
+      },
+    });
+    const firstOutcome = firstHost.execute(
+      executionInput("ctx-registry-persistence-failure", "first"),
+    ).then(
+      () => undefined,
+      (error) => error,
+    );
+    await closeEntered.promise;
+
+    const secondRun = secondHost.execute(
+      executionInput("ctx-registry-persistence-failure", "second"),
+    );
+    const earlyOutcome = await Promise.race([
+      secondEntered.promise.then(() => "entered" as const),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
+    ]);
+    closeRelease.resolve();
+    const firstError = await firstOutcome;
+    await secondRun;
+
+    assert.equal(earlyOutcome, "blocked");
+    assert.match(String(firstError), /registry must be a regular non-symlink file/i);
+    assert.equal(closeCalls, 1);
+    assert.equal(second.inputs.length, 1);
+    const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
+    assert.equal(
+      registry.contexts["ctx-registry-persistence-failure"].sessionFile,
+      second.sessions[0].sessionFile,
+    );
+    await Promise.all([firstHost.close(), secondHost.close()]);
+    assert.equal(closeCalls, 1);
+  });
+});
+
 test("concurrent capacity is enforced before constructing a second session", async () => {
   await withFixture(async (fixture) => {
     const firstEntered = deferred();
