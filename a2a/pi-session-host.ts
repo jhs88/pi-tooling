@@ -26,7 +26,7 @@ import type { A2AExecutionInput, A2AExecutionResult } from "./server.ts";
 
 const REGISTRY_VERSION = 1;
 const DEFAULT_MAX_CONTEXTS = 256;
-const REGISTRY_LOCK_ATTEMPTS = 250;
+const REGISTRY_LOCK_ATTEMPTS = 15_000;
 const REGISTRY_LOCK_RETRY_MS = 20;
 const SAFE_CONTEXT_ID = /^[A-Za-z0-9._:-]{1,200}$/;
 const INPUT_REQUIRED_MARKER = "[INPUT_REQUIRED]";
@@ -239,7 +239,11 @@ async function acquireRegistryLock(
   const lockPath = `${registryPath}.lock`;
   await ensurePrivateDirectory(agentDir, path.dirname(lockPath));
   let lockIdentity: { dev: bigint; ino: bigint } | undefined;
-  for (let attempt = 0; attempt < REGISTRY_LOCK_ATTEMPTS; attempt++) {
+  for (
+    let attempt = 0;
+    signal !== undefined || attempt < REGISTRY_LOCK_ATTEMPTS;
+    attempt++
+  ) {
     if (signal?.aborted) throw abortError(signal);
     try {
       await mkdir(lockPath, { mode: 0o700 });
@@ -421,6 +425,7 @@ export class PiSessionHost {
   readonly #maxContexts: number;
   readonly #sessionFactory: PiSessionFactory;
   readonly #sessions = new Map<string, HostedPiSession>();
+  readonly #mappedSessionFiles = new Map<string, string>();
   readonly #initializationLocks = new Map<string, RegistryLockRelease>();
   readonly #closeController = new AbortController();
   #active = false;
@@ -531,6 +536,7 @@ export class PiSessionHost {
         [...new Set(this.#sessions.values())].map((session) => session.close()),
       );
       this.#sessions.clear();
+      this.#mappedSessionFiles.clear();
     })();
     return this.#closePromise;
   }
@@ -568,26 +574,35 @@ export class PiSessionHost {
     const cached = this.#sessions.get(contextId);
     if (cached) return cached;
 
-    const release = await acquireRegistryLock(this.#agentDir, this.#registryPath, signal);
+    const initialRegistry = await this.#loadRegistry();
+    let mapped = initialRegistry.contexts[contextId];
+    if (mapped && mapped.cwd !== this.#cwd) {
+      throw new Error("A2A context belongs to a different workspace");
+    }
+    let release: RegistryLockRelease | undefined;
     let holdsInitializationLock = false;
     try {
-      const registry = await this.#loadRegistry();
-      const mapped = registry.contexts[contextId];
-      if (mapped && mapped.cwd !== this.#cwd) {
-        throw new Error("A2A context belongs to a different workspace");
+      if (!mapped) {
+        release = await acquireRegistryLock(this.#agentDir, this.#registryPath, signal);
+        const registry = await this.#loadRegistry();
+        mapped = registry.contexts[contextId];
+        if (mapped && mapped.cwd !== this.#cwd) {
+          throw new Error("A2A context belongs to a different workspace");
+        }
+        const knownContexts = new Set([
+          ...Object.entries(registry.contexts)
+            .filter(([, entry]) => entry.cwd === this.#cwd)
+            .map(([id]) => id),
+          ...this.#sessions.keys(),
+        ]);
+        if (!mapped && knownContexts.size >= this.#maxContexts) {
+          throw new Error("A2A context capacity reached");
+        }
       }
-      const knownContexts = new Set([
-        ...Object.entries(registry.contexts)
-          .filter(([, entry]) => entry.cwd === this.#cwd)
-          .map(([id]) => id),
-        ...this.#sessions.keys(),
-      ]);
-      if (!mapped && knownContexts.size >= this.#maxContexts) {
-        throw new Error("A2A context capacity reached");
-      }
-      if (mapped) {
+      if (release && mapped) {
         await release();
-      } else {
+        release = undefined;
+      } else if (release) {
         this.#initializationLocks.set(contextId, release);
         holdsInitializationLock = true;
       }
@@ -619,6 +634,7 @@ export class PiSessionHost {
           throw new Error("Reopened Pi session path does not match its registry mapping");
         }
         this.#sessions.set(contextId, session);
+        if (mapped) this.#mappedSessionFiles.set(contextId, sessionFile!);
         return session;
       } catch (error) {
         await session.close().catch(() => {});
@@ -627,7 +643,7 @@ export class PiSessionHost {
     } catch (error) {
       if (holdsInitializationLock) {
         await this.#releaseInitializationLock(contextId, true);
-      } else {
+      } else if (release) {
         await release();
       }
       throw error;
@@ -644,6 +660,13 @@ export class PiSessionHost {
       session.sessionFile ?? "",
     );
     await chmod(canonicalFile, 0o600);
+    const mappedFile = this.#mappedSessionFiles.get(contextId);
+    if (mappedFile) {
+      if (mappedFile !== canonicalFile) {
+        throw new Error("A2A context is already mapped to a different Pi session");
+      }
+      return;
+    }
     await this.#withContextRegistryLock(contextId, async () => {
       const registry = await this.#loadRegistry();
       const existing = registry.contexts[contextId];
@@ -667,6 +690,7 @@ export class PiSessionHost {
       };
       await writeRegistryAtomic(this.#agentDir, this.#registryPath, registry);
     });
+    this.#mappedSessionFiles.set(contextId, canonicalFile);
   }
 
   async #withContextRegistryLock<T>(

@@ -343,6 +343,54 @@ test("concurrent creation of one context reopens the first canonical session", a
   });
 });
 
+test("an already-mapped context remains available during unrelated initialization", async () => {
+  await withFixture(async (fixture) => {
+    const seed = fakeFactory();
+    const seedHost = new PiSessionHost({ ...fixture, sessionFactory: seed.factory });
+    await seedHost.execute(executionInput("ctx-already-mapped", "seed"));
+    await seedHost.close();
+
+    const blockerEntered = deferred();
+    const blockerRelease = deferred();
+    const blocker = fakeFactory();
+    const blockerHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        blockerEntered.resolve();
+        await blockerRelease.promise;
+        return blocker.factory(input);
+      },
+    });
+    const mappedEntered = deferred();
+    const mapped = fakeFactory();
+    const mappedHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        mappedEntered.resolve();
+        return mapped.factory(input);
+      },
+    });
+    const blockerRun = blockerHost.execute(
+      executionInput("ctx-unrelated-initialization", "block"),
+    );
+    await blockerEntered.promise;
+
+    const mappedRun = mappedHost.execute(
+      executionInput("ctx-already-mapped", "continue"),
+    );
+    const earlyOutcome = await Promise.race([
+      mappedEntered.promise.then(() => "entered" as const),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
+    ]);
+    blockerRelease.resolve();
+    await Promise.all([blockerRun, mappedRun]);
+
+    assert.equal(earlyOutcome, "entered");
+    assert.equal(mapped.inputs[0].sessionFile, seed.sessions[0].sessionFile);
+    await Promise.all([blockerHost.close(), mappedHost.close()]);
+  });
+});
+
 test("failed unmaterialized initialization evicts its cached session before retry", async () => {
   await withFixture(async (fixture) => {
     let factoryCalls = 0;
