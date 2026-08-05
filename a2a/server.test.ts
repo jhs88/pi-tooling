@@ -367,6 +367,44 @@ test("server returns 413 as soon as a streaming body crosses the limit", async (
   assert.equal(outcome, 413);
 });
 
+test("server shutdown aborts an admitted authenticated partial body", async () => {
+  let executions = 0;
+  const server = createServer({
+    execute: async () => {
+      executions++;
+      return { state: "TASK_STATE_COMPLETED", text: "unexpected" };
+    },
+  });
+  const url = new URL(await startOnEphemeralPort(server));
+  const request = http.request({
+    hostname: url.hostname,
+    port: url.port,
+    path: "/",
+    method: "POST",
+    headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+  });
+  request.on("error", () => {});
+  const connected = new Promise<void>((resolve) => {
+    request.once("socket", (socket) => {
+      if (socket.readyState === "open") resolve();
+      else socket.once("connect", resolve);
+    });
+  });
+  request.write(JSON.stringify(sendMessageRequest("shutdown", "ctx-shutdown")).slice(0, -1));
+  await connected;
+
+  const stopping = server.stop();
+  const outcome = await Promise.race([
+    stopping.then(() => "stopped" as const),
+    new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
+  ]);
+  request.destroy();
+  await stopping;
+
+  assert.equal(outcome, "stopped");
+  assert.equal(executions, 0);
+});
+
 test("GetTask and ListTasks expose bounded completed task state", async (t) => {
   const server = createServer({ maxTasks: 2 });
   t.after(() => server.stop());

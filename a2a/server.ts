@@ -118,7 +118,9 @@ export class PiA2AServer {
   readonly #tasks = new Map<string, A2ATask>();
   readonly #controllers = new Map<string, AbortController>();
   readonly #executionSettlements = new Map<string, Promise<void>>();
+  readonly #requestControllers = new Set<AbortController>();
   #server: http.Server | null = null;
+  #stopping = false;
 
   constructor(options: PiA2AServerOptions) {
     if (!LOOPBACK_HOSTS.has(options.host)) {
@@ -150,6 +152,7 @@ export class PiA2AServer {
 
   async start(): Promise<void> {
     if (this.#server) throw new Error("A2A server is already running");
+    this.#stopping = false;
     const server = http.createServer((req, res) => {
       void this.#handleRequest(req, res);
     });
@@ -182,11 +185,16 @@ export class PiA2AServer {
   async stop(): Promise<void> {
     const server = this.#server;
     if (!server) return;
+    this.#stopping = true;
     const closing = new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
     });
+    for (const controller of this.#requestControllers) {
+      controller.abort(new Error("A2A server is stopping"));
+    }
     for (const controller of this.#controllers.values()) controller.abort();
     await Promise.allSettled([...this.#executionSettlements.values()]);
+    server.closeAllConnections();
     await closing;
     this.#server = null;
   }
@@ -210,7 +218,17 @@ export class PiA2AServer {
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): Promise<void> {
+    const caller = new AbortController();
+    this.#requestControllers.add(caller);
+    const onDisconnect = () => {
+      if (!res.writableEnded) caller.abort(new Error("A2A client disconnected"));
+    };
+    res.once("close", onDisconnect);
     try {
+      if (this.#stopping) {
+        res.destroy();
+        return;
+      }
       if (!this.#isAuthenticated(req)) {
         unauthorized(res);
         return;
@@ -236,7 +254,7 @@ export class PiA2AServer {
 
       let body: string;
       try {
-        body = await this.#readBody(req);
+        body = await this.#readBody(req, caller.signal);
       } catch (error) {
         if (error instanceof PayloadTooLargeError) {
           res.shouldKeepAlive = false;
@@ -245,6 +263,11 @@ export class PiA2AServer {
           return;
         }
         throw error;
+      }
+
+      if (this.#stopping || caller.signal.aborted) {
+        res.destroy();
+        return;
       }
 
       let request: JsonRpcRequest;
@@ -268,24 +291,21 @@ export class PiA2AServer {
         return;
       }
 
-      const caller = new AbortController();
-      const onDisconnect = () => {
-        if (!res.writableEnded) caller.abort(new Error("A2A client disconnected"));
-      };
-      res.once("close", onDisconnect);
-      let response: unknown;
-      try {
-        response = await this.#dispatch(request, caller.signal);
-      } finally {
-        res.removeListener("close", onDisconnect);
-      }
+      const response = await this.#dispatch(request, caller.signal);
       if (!res.destroyed) this.#sendJson(res, 200, response);
     } catch {
+      if (this.#stopping || caller.signal.aborted) {
+        if (!res.destroyed) res.destroy();
+        return;
+      }
       if (!res.headersSent) {
         this.#sendJson(res, 500, { error: "Internal Server Error" });
       } else {
         res.end();
       }
+    } finally {
+      res.removeListener("close", onDisconnect);
+      this.#requestControllers.delete(caller);
     }
   }
 
@@ -570,27 +590,55 @@ export class PiA2AServer {
     this.#tasks.set(task.id, task);
   }
 
-  #readBody(req: http.IncomingMessage): Promise<string> {
+  #readBody(req: http.IncomingMessage, signal: AbortSignal): Promise<string> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       let size = 0;
+      let settled = false;
+      const cleanup = () => {
+        req.removeListener("data", onData);
+        req.removeListener("end", onEnd);
+        req.removeListener("error", onError);
+        signal.removeEventListener("abort", onAbort);
+      };
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
       const onData = (chunk: Buffer | string) => {
         const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         size += buffer.length;
         if (size > this.#options.maxBodyBytes) {
           chunks.length = 0;
-          req.removeListener("data", onData);
-          req.removeListener("end", onEnd);
+          settled = true;
+          cleanup();
           req.resume();
           reject(new PayloadTooLargeError("request body exceeds limit"));
           return;
         }
         chunks.push(buffer);
       };
-      const onEnd = () => resolve(Buffer.concat(chunks).toString("utf8"));
+      const onEnd = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(Buffer.concat(chunks).toString("utf8"));
+      };
+      const onError = (error: Error) => fail(error);
+      const onAbort = () => {
+        const reason = signal.reason instanceof Error
+          ? signal.reason
+          : new Error("A2A request aborted");
+        fail(reason);
+        req.destroy();
+      };
       req.on("data", onData);
       req.on("end", onEnd);
-      req.on("error", reject);
+      req.on("error", onError);
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
     });
   }
 

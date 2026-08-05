@@ -22,6 +22,7 @@ import {
   createChildResources,
   shutdownAndDisposeChildSession,
 } from "../shared/child-session.ts";
+import { MAX_A2A_CONTEXTS } from "./config.ts";
 import type { A2AExecutionInput, A2AExecutionResult } from "./server.ts";
 
 const REGISTRY_VERSION = 1;
@@ -452,8 +453,14 @@ export class PiSessionHost {
       options.sessionsDir ?? canonicalPiSessionDirectory(this.#cwd, this.#agentDir),
     );
     this.#maxContexts = options.maxContexts ?? DEFAULT_MAX_CONTEXTS;
-    if (!Number.isSafeInteger(this.#maxContexts) || this.#maxContexts <= 0) {
-      throw new Error("maxContexts must be a positive integer");
+    if (
+      !Number.isSafeInteger(this.#maxContexts)
+      || this.#maxContexts <= 0
+      || this.#maxContexts > MAX_A2A_CONTEXTS
+    ) {
+      throw new Error(
+        `maxContexts must be a positive integer no greater than ${MAX_A2A_CONTEXTS}`,
+      );
     }
     this.#sessionFactory = options.sessionFactory ?? createSdkPiSession;
     this.#onRegistryLockWait = options.onRegistryLockWait;

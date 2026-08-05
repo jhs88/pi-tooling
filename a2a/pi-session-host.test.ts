@@ -845,6 +845,19 @@ test("context capacity is enforced before constructing or prompting a new sessio
   });
 });
 
+test("context capacity rejects values above the documented hard limit", async () => {
+  await withFixture(async (fixture) => {
+    assert.throws(
+      () => new PiSessionHost({
+        ...fixture,
+        maxContexts: 1_025,
+        sessionFactory: fakeFactory().factory,
+      }),
+      /maxContexts must be a positive integer no greater than 1024/,
+    );
+  });
+});
+
 test("a restarted host reopens the mapped canonical Pi session", async () => {
   await withFixture(async (fixture) => {
     const first = fakeFactory();
