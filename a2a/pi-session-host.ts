@@ -540,7 +540,7 @@ export class PiSessionHost {
       }
       const messageStart = session.messages.length;
       onAbort = () => {
-        if (!abortPromise) abortPromise = session!.abort();
+        if (!abortPromise) abortPromise = session!.abort().catch(() => {});
       };
       input.signal.addEventListener("abort", onAbort, { once: true });
       if (input.signal.aborted) {

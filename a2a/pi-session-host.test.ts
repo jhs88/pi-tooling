@@ -1323,6 +1323,42 @@ test("an aborted A2A turn aborts the Pi session once and keeps cleanup idempoten
   });
 });
 
+test("a rejected session abort is handled while the prompt remains pending", async () => {
+  await withFixture(async (fixture) => {
+    const promptStarted = deferred();
+    const releasePrompt = deferred();
+    const sessionFile = path.join(fixture.sessionsDir, "rejected-abort.jsonl");
+    const factory: PiSessionFactory = async () => {
+      await mkdir(fixture.sessionsDir, { recursive: true });
+      await writeFile(sessionFile, '{"type":"session"}\n', { mode: 0o600 });
+      return {
+        sessionFile,
+        messages: [],
+        async prompt() {
+          promptStarted.resolve();
+          await releasePrompt.promise;
+        },
+        async abort() {
+          throw new Error("abort cleanup failed");
+        },
+        async close() {},
+      };
+    };
+    const host = new PiSessionHost({ ...fixture, sessionFactory: factory });
+    const controller = new AbortController();
+    const execution = host.execute(
+      executionInput("ctx-rejected-abort", "wait", controller.signal),
+    );
+
+    await promptStarted.promise;
+    controller.abort(new Error("caller canceled"));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    releasePrompt.resolve();
+    await assert.rejects(execution, /caller canceled|aborted/i);
+    await host.close();
+  });
+});
+
 test("a materialized session remains mapped when prompt execution fails", async () => {
   await withFixture(async (fixture) => {
     const sessionFile = path.join(fixture.sessionsDir, "prompt-failed.jsonl");
