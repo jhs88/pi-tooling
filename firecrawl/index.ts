@@ -1,4 +1,6 @@
-// Adapted from davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e; self-hosted-only locally.
+// Adapted from davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e;
+// scrape bounds refreshed from @73bf4d826f39b5cab6b7865e706ba4a2669629ca;
+// self-hosted-only locally.
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
   type AgentToolResult,
@@ -309,12 +311,14 @@ export default function firecrawlTools(pi: ExtensionAPI) {
         Type.Number({
           description: SCRAPE_PARAMETER_DESCRIPTIONS.waitFor,
           minimum: 0,
+          maximum: 60_000,
         }),
       ),
       timeout: Type.Optional(
         Type.Number({
           description: SCRAPE_PARAMETER_DESCRIPTIONS.timeout,
           minimum: 1,
+          maximum: 120_000,
         }),
       ),
       includeMetadata: Type.Optional(

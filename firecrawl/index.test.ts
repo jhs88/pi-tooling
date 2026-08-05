@@ -1,4 +1,5 @@
-// Adaptation tests for davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e.
+// Adaptation tests for davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e;
+// scrape-bound regression refreshed from @73bf4d826f39b5cab6b7865e706ba4a2669629ca.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
@@ -6,6 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Effect } from "effect";
+import type { TSchema } from "typebox";
+import { Check } from "typebox/value";
 import { resolveFirecrawlConfig } from "./config.ts";
 import firecrawlTools, { crawlEffect, type CrawlClient } from "./index.ts";
 import { formatFirecrawlOutput } from "./output.ts";
@@ -16,6 +19,29 @@ test("extension registers search, crawl, and scrape without reading configuratio
     registerTool: (tool: { name: string }) => registered.push(tool.name),
   } as unknown as ExtensionAPI);
   assert.deepEqual(registered, ["search", "crawl", "scrape"]);
+});
+
+test("scrape schema bounds model-controlled wait and timeout values", () => {
+  const registered: Array<{ name: string; parameters: unknown }> = [];
+  firecrawlTools({
+    registerTool: (tool: { name: string; parameters: unknown }) => registered.push(tool),
+  } as unknown as ExtensionAPI);
+  const scrape = registered.find((tool) => tool.name === "scrape");
+  assert.ok(scrape);
+  const properties = (
+    scrape.parameters as {
+      properties: Record<string, { maximum?: number }>;
+    }
+  ).properties;
+
+  assert.equal(properties.waitFor?.maximum, 60_000);
+  assert.equal(properties.timeout?.maximum, 120_000);
+  const schema = scrape.parameters as TSchema;
+  const base = { url: "https://example.com" };
+  assert.equal(Check(schema, { ...base, waitFor: 60_000 }), true);
+  assert.equal(Check(schema, { ...base, waitFor: 60_001 }), false);
+  assert.equal(Check(schema, { ...base, timeout: 120_000 }), true);
+  assert.equal(Check(schema, { ...base, timeout: 120_001 }), false);
 });
 
 test("configuration requires an explicit API URL", () => {

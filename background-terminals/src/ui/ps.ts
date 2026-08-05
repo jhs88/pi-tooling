@@ -16,14 +16,15 @@ import type {
 import { formatSize } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { sanitizeTerminalLine } from "../../../shared/terminal-text.ts";
 import { formatElapsed, formatExit, type TerminalSnapshot } from "../domain.ts";
 import type { TerminalManager } from "../manager.ts";
-import { createOutputLineCache, sanitizeText } from "./output-view.ts";
+import { createOutputLineCache } from "./output-view.ts";
 
 /** One-line-safe rendering of model-provided text (titles, commands): a
  * newline or control char inside a fixed-height row desyncs the renderer. */
 function oneLine(text: string) {
-  return sanitizeText(text.replace(/\s+/g, " "));
+  return sanitizeTerminalLine(text);
 }
 
 function configuredKeys(
