@@ -39,6 +39,36 @@ test("server constructor rejects non-loopback hosts and bodies over one MiB", ()
   assert.throws(() => createServer({ maxTasks: 1_025 }), /maxTasks/);
 });
 
+test("concurrent server stops coalesce", async () => {
+  const server = createServer();
+  await startOnEphemeralPort(server);
+
+  await Promise.all([server.stop(), server.stop()]);
+  assert.equal(server.isRunning(), false);
+});
+
+test("server stop serializes against in-flight startup", async () => {
+  const server = createServer();
+
+  const starting = server.start();
+  const stopping = server.stop();
+  await Promise.all([starting, stopping]);
+
+  assert.equal(server.isRunning(), false);
+});
+
+test("server startup waits for an in-flight stop", async () => {
+  const server = createServer();
+  await startOnEphemeralPort(server);
+
+  const stopping = server.stop();
+  const restarting = server.start();
+  await Promise.all([stopping, restarting]);
+
+  assert.equal(server.isRunning(), true);
+  await server.stop();
+});
+
 test("server exposes an authenticated canonical Agent Card without wildcard CORS", async (t) => {
   const server = createServer();
   t.after(() => server.stop());
