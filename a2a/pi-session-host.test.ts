@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { chmod, readFile, mkdir, mkdtemp, rm, stat, symlink, watch, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -388,6 +389,55 @@ test("an already-mapped context remains available during unrelated initializatio
     assert.equal(earlyOutcome, "entered");
     assert.equal(mapped.inputs[0].sessionFile, seed.sessions[0].sessionFile);
     await Promise.all([blockerHost.close(), mappedHost.close()]);
+  });
+});
+
+test("concurrent hosts serialize turns for one mapped context", async () => {
+  await withFixture(async (fixture) => {
+    const seed = fakeFactory();
+    const seedHost = new PiSessionHost({ ...fixture, sessionFactory: seed.factory });
+    await seedHost.execute(executionInput("ctx-mapped-turn", "seed"));
+    await seedHost.close();
+
+    const firstEntered = deferred();
+    const firstRelease = deferred();
+    const secondWaiting = deferred();
+    const first = fakeFactory();
+    const second = fakeFactory();
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: async (input) => {
+        const session = await first.factory(input);
+        const prompt = session.prompt.bind(session);
+        session.prompt = async (message) => {
+          firstEntered.resolve();
+          await firstRelease.promise;
+          await prompt(message);
+        };
+        return session;
+      },
+    });
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: second.factory,
+      onContextLockWait: secondWaiting.resolve,
+    });
+
+    const firstRun = firstHost.execute(executionInput("ctx-mapped-turn", "first"));
+    let secondRun: Promise<unknown> | undefined;
+    let settlements: PromiseSettledResult<unknown>[] = [];
+    try {
+      await firstEntered.promise;
+      secondRun = secondHost.execute(executionInput("ctx-mapped-turn", "second"));
+      await secondWaiting.promise;
+      assert.equal(second.inputs.length, 0);
+    } finally {
+      firstRelease.resolve();
+      settlements = await Promise.allSettled([firstRun, ...(secondRun ? [secondRun] : [])]);
+      await Promise.all([firstHost.close(), secondHost.close()]);
+    }
+    assert.equal(settlements.every(({ status }) => status === "fulfilled"), true);
+    assert.equal(second.inputs.length, 1);
   });
 });
 
@@ -929,6 +979,27 @@ test("a registry symlink fails closed", async () => {
       /registry.*regular non-symlink file|symbolic link/i,
     );
     assert.equal(fake.inputs.length, 0);
+  });
+});
+
+test("a context turn-lock symlink fails closed", async () => {
+  await withFixture(async (fixture) => {
+    const contextId = "ctx-turn-lock-symlink";
+    const contextHash = createHash("sha256").update(contextId).digest("hex");
+    const lockPath = `${fixture.registryPath}.${contextHash}.turn.lock`;
+    const target = path.join(fixture.root, "turn-lock-target");
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await mkdir(target);
+    await symlink(target, lockPath);
+    const fake = fakeFactory();
+    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+
+    await assert.rejects(
+      host.execute(executionInput(contextId, "hello")),
+      /context turn lock must be a private directory/,
+    );
+    assert.equal(fake.inputs.length, 0);
+    await host.close();
   });
 });
 

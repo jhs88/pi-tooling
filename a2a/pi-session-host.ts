@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   chmod,
   lstat,
@@ -75,6 +75,7 @@ export interface PiSessionHostOptions {
   maxContexts?: number;
   sessionFactory?: PiSessionFactory;
   onRegistryLockWait?: () => void;
+  onContextLockWait?: () => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -233,13 +234,14 @@ async function writeRegistryAtomic(
 
 type RegistryLockRelease = () => Promise<void>;
 
-async function acquireRegistryLock(
+async function acquirePrivateDirectoryLock(
   agentDir: string,
-  registryPath: string,
+  lockPath: string,
+  lockDescription: string,
+  staleLockMessage: string,
   signal?: AbortSignal,
   onWait?: () => void,
 ): Promise<RegistryLockRelease> {
-  const lockPath = `${registryPath}.lock`;
   await ensurePrivateDirectory(agentDir, path.dirname(lockPath));
   let lockIdentity: { dev: bigint; ino: bigint } | undefined;
   let reportedWait = false;
@@ -253,7 +255,7 @@ async function acquireRegistryLock(
       await mkdir(lockPath, { mode: 0o700 });
       const metadata = await lstat(lockPath, { bigint: true });
       if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
-        throw new Error("A2A context registry lock must be a private directory");
+        throw new Error(`${lockDescription} must be a private directory`);
       }
       lockIdentity = { dev: metadata.dev, ino: metadata.ino };
       break;
@@ -264,7 +266,7 @@ async function acquireRegistryLock(
         throw metadataError;
       });
       if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
-        throw new Error("A2A context registry lock must be a private directory");
+        throw new Error(`${lockDescription} must be a private directory`);
       }
       if (!reportedWait) {
         reportedWait = true;
@@ -287,16 +289,14 @@ async function acquireRegistryLock(
     }
   }
   if (!lockIdentity) {
-    throw new Error(
-      "A2A context registry is locked; if no Pi A2A host is running, remove the stale contexts.json.lock directory",
-    );
+    throw new Error(staleLockMessage);
   }
 
   let releasePromise: Promise<void> | undefined;
   const release = () => {
     releasePromise ??= (async () => {
       const metadata = await lstat(lockPath, { bigint: true }).catch((error) => {
-        throw new Error("A2A context registry lock disappeared unexpectedly", { cause: error });
+        throw new Error(`${lockDescription} disappeared unexpectedly`, { cause: error });
       });
       if (
         !metadata.isDirectory()
@@ -304,7 +304,7 @@ async function acquireRegistryLock(
         || metadata.dev !== lockIdentity.dev
         || metadata.ino !== lockIdentity.ino
       ) {
-        throw new Error("A2A context registry lock changed unexpectedly");
+        throw new Error(`${lockDescription} changed unexpectedly`);
       }
       await rmdir(lockPath);
     })();
@@ -315,6 +315,40 @@ async function acquireRegistryLock(
     throw abortError(signal);
   }
   return release;
+}
+
+function acquireRegistryLock(
+  agentDir: string,
+  registryPath: string,
+  signal?: AbortSignal,
+  onWait?: () => void,
+): Promise<RegistryLockRelease> {
+  return acquirePrivateDirectoryLock(
+    agentDir,
+    `${registryPath}.lock`,
+    "A2A context registry lock",
+    "A2A context registry is locked; if no Pi A2A host is running, remove the stale contexts.json.lock directory",
+    signal,
+    onWait,
+  );
+}
+
+function acquireContextTurnLock(
+  agentDir: string,
+  registryPath: string,
+  contextId: string,
+  signal: AbortSignal,
+  onWait?: () => void,
+): Promise<RegistryLockRelease> {
+  const contextHash = createHash("sha256").update(contextId).digest("hex");
+  return acquirePrivateDirectoryLock(
+    agentDir,
+    `${registryPath}.${contextHash}.turn.lock`,
+    "A2A context turn lock",
+    "A2A context turn is locked",
+    signal,
+    onWait,
+  );
 }
 
 async function withRegistryLock<T>(
@@ -433,6 +467,7 @@ export class PiSessionHost {
   readonly #maxContexts: number;
   readonly #sessionFactory: PiSessionFactory;
   readonly #onRegistryLockWait: (() => void) | undefined;
+  readonly #onContextLockWait: (() => void) | undefined;
   readonly #sessions = new Map<string, HostedPiSession>();
   readonly #mappedSessionFiles = new Map<string, string>();
   readonly #initializationLocks = new Map<string, RegistryLockRelease>();
@@ -464,6 +499,7 @@ export class PiSessionHost {
     }
     this.#sessionFactory = options.sessionFactory ?? createSdkPiSession;
     this.#onRegistryLockWait = options.onRegistryLockWait;
+    this.#onContextLockWait = options.onContextLockWait;
   }
 
   async execute(input: A2AExecutionInput): Promise<A2AExecutionResult> {
@@ -481,8 +517,16 @@ export class PiSessionHost {
     let session: HostedPiSession | undefined;
     let onAbort: (() => void) | undefined;
     let abortPromise: Promise<void> | undefined;
+    let releaseTurn: RegistryLockRelease | undefined;
     try {
       const setupSignal = AbortSignal.any([input.signal, this.#closeController.signal]);
+      releaseTurn = await acquireContextTurnLock(
+        this.#agentDir,
+        this.#registryPath,
+        input.contextId,
+        setupSignal,
+        this.#onContextLockWait,
+      );
       session = await this.#sessionFor(input.contextId, setupSignal);
       this.#activeSession = session;
       if (this.#closed) {
@@ -530,13 +574,17 @@ export class PiSessionHost {
       try {
         await this.#releaseInitializationLock(input.contextId, true);
       } finally {
-        if (session && onAbort) {
-          input.signal.removeEventListener("abort", onAbort);
+        try {
+          if (session && onAbort) {
+            input.signal.removeEventListener("abort", onAbort);
+          }
+          if (releaseTurn) await releaseTurn();
+        } finally {
+          this.#activeSession = undefined;
+          this.#active = false;
+          resolveActive();
+          if (this.#activeDone === activeDone) this.#activeDone = undefined;
         }
-        this.#activeSession = undefined;
-        this.#active = false;
-        resolveActive();
-        if (this.#activeDone === activeDone) this.#activeDone = undefined;
       }
     }
   }
