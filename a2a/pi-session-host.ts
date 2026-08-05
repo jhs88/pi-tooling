@@ -578,6 +578,10 @@ export class PiSessionHost {
           if (session && onAbort) {
             input.signal.removeEventListener("abort", onAbort);
           }
+          if (session && this.#sessions.get(input.contextId) === session) {
+            this.#sessions.delete(input.contextId);
+            await session.close().catch(() => {});
+          }
           if (releaseTurn) await releaseTurn();
         } finally {
           this.#activeSession = undefined;

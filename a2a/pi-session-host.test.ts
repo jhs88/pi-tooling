@@ -109,6 +109,39 @@ function fakeFactory(
   return { factory, inputs, sessions };
 }
 
+function branchingFactory(paths: Map<string, string[]>) {
+  const inputs: PiSessionFactoryInput[] = [];
+  const factory: PiSessionFactory = async (input) => {
+    inputs.push(input);
+    const sessionFile = input.sessionFile ?? path.join(
+      input.sessionsDir,
+      `branch-${paths.size + 1}.jsonl`,
+    );
+    await mkdir(path.dirname(sessionFile), { recursive: true });
+    if (!input.sessionFile) {
+      await writeFile(sessionFile, '{"type":"session"}\n', { mode: 0o600 });
+    }
+    const history = [...(paths.get(sessionFile) ?? [])];
+    const messages: unknown[] = [];
+    return {
+      sessionFile,
+      messages,
+      async prompt(message) {
+        history.push(message);
+        paths.set(sessionFile, [...history]);
+        messages.push({
+          role: "assistant",
+          content: [{ type: "text", text: `PI_REPLY:${message}` }],
+          stopReason: "stop",
+        });
+      },
+      async abort() {},
+      async close() {},
+    };
+  };
+  return { factory, inputs };
+}
+
 test("default storage uses Pi's canonical cwd session directory", async () => {
   await withFixture(async (fixture) => {
     const fake = fakeFactory();
@@ -194,7 +227,7 @@ test("session storage is owner-only even when the SDK uses permissive modes", as
   });
 });
 
-test("one A2A context reuses one persisted Pi session", async () => {
+test("one A2A context reopens one persisted Pi session for each turn", async () => {
   await withFixture(async (fixture) => {
     const fake = fakeFactory();
     const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
@@ -208,8 +241,10 @@ test("one A2A context reuses one persisted Pi session", async () => {
       { state: "TASK_STATE_COMPLETED", text: "PI_REPLY:second" },
     );
 
-    assert.equal(fake.inputs.length, 1);
-    assert.deepEqual(fake.sessions[0].prompts, ["first", "second"]);
+    assert.equal(fake.inputs.length, 2);
+    assert.equal(fake.inputs[1].sessionFile, fake.sessions[0].sessionFile);
+    assert.deepEqual(fake.sessions[0].prompts, ["first"]);
+    assert.deepEqual(fake.sessions[1].prompts, ["second"]);
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
     assert.equal(
       registry.contexts["ctx-reuse"].sessionFile,
@@ -218,6 +253,7 @@ test("one A2A context reuses one persisted Pi session", async () => {
     assert.equal((await stat(fixture.registryPath)).mode & 0o777, 0o600);
     await host.close();
     assert.equal(fake.sessions[0].closeCalls, 1);
+    assert.equal(fake.sessions[1].closeCalls, 1);
   });
 });
 
@@ -438,6 +474,31 @@ test("concurrent hosts serialize turns for one mapped context", async () => {
     }
     assert.equal(settlements.every(({ status }) => status === "fulfilled"), true);
     assert.equal(second.inputs.length, 1);
+  });
+});
+
+test("alternating hosts keep mapped turns on one canonical conversation path", async () => {
+  await withFixture(async (fixture) => {
+    const paths = new Map<string, string[]>();
+    const seed = branchingFactory(paths);
+    const first = branchingFactory(paths);
+    const second = branchingFactory(paths);
+    const seedHost = new PiSessionHost({ ...fixture, sessionFactory: seed.factory });
+    const firstHost = new PiSessionHost({ ...fixture, sessionFactory: first.factory });
+    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+
+    await seedHost.execute(executionInput("ctx-alternating", "seed"));
+    await firstHost.execute(executionInput("ctx-alternating", "A1"));
+    await secondHost.execute(executionInput("ctx-alternating", "B1"));
+    await firstHost.execute(executionInput("ctx-alternating", "A2"));
+
+    const sessionFile = seed.inputs[0].sessionFile
+      ?? [...paths.keys()][0];
+    assert.deepEqual(paths.get(sessionFile), ["seed", "A1", "B1", "A2"]);
+    assert.equal(first.inputs.length, 2);
+    assert.equal(first.inputs[0].sessionFile, sessionFile);
+    assert.equal(first.inputs[1].sessionFile, sessionFile);
+    await Promise.all([seedHost.close(), firstHost.close(), secondHost.close()]);
   });
 });
 
