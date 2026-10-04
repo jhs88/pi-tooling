@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { NodeServices } from "@effect/platform-node";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Effect } from "effect";
 import fileSearchTools from "./index.ts";

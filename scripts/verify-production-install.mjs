@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const execFile = promisify(execFileCallback);
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -24,7 +24,7 @@ try {
     { cwd: packageRoot },
   );
   const packResult = JSON.parse(packed.stdout);
-  const packedFilename = packResult?.[0]?.filename;
+  const packedFilename = (Array.isArray(packResult) ? packResult[0] : Object.values(packResult)[0])?.filename;
   if (typeof packedFilename !== "string") {
     throw new Error("npm pack did not return a package filename");
   }
@@ -71,6 +71,21 @@ try {
     throw new Error("production fixture unexpectedly installed the Pi host peer");
   } catch (error) {
     if (error instanceof Error && error.message.includes("unexpectedly")) throw error;
+  }
+
+  // Load every packaged extension with the real host and no installed host peers.
+  // The headless entrypoint alone does not exercise file-search or Firecrawl imports.
+  const { DefaultResourceLoader } = await import(pathToFileURL(path.join(piHostPackage, "dist/index.js")));
+  const loader = new DefaultResourceLoader({
+    cwd: installRoot,
+    agentDir: path.join(root, "extension-agent"),
+    additionalExtensionPaths: [path.join(installedPackage, "index.ts")],
+    noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
+  });
+  await loader.reload();
+  const loaded = loader.getExtensions();
+  if (loaded.errors.length > 0 || loaded.extensions.length !== 1) {
+    throw new Error(`Production extension failed to load: ${JSON.stringify(loaded.errors)}`);
   }
 
   const executable = path.join(installRoot, "node_modules", ".bin", "pi-a2a-server");

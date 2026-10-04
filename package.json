@@ -1,6 +1,6 @@
 {
   "name": "@jhs88/pi-tooling",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Selected file search, Firecrawl, ask-user, background terminal, workflow, and authenticated A2A tools for Pi",
   "repository": {
@@ -48,9 +48,9 @@
     "typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "0.99.1",
-    "@earendil-works/pi-coding-agent": "0.99.1",
-    "@earendil-works/pi-tui": "0.99.1",
+    "@earendil-works/pi-ai": "1.0.2",
+    "@earendil-works/pi-coding-agent": "1.0.2",
+    "@earendil-works/pi-tui": "1.0.2",
     "@tintinweb/pi-subagents": "0.19.0",
     "@effect/tsgo": "0.19.0",
     "@types/node": "26.1.1",

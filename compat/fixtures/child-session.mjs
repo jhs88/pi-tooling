@@ -111,9 +111,16 @@ async function main() {
       await assert.rejects(access(logPath), { code: 'ENOENT' }, 'disabled extensions must not start an MCP server');
       return;
     }
-    // Execute only extension startup hooks. Native MCP's bounded startup barrier awaits
-    // registrations; this does not construct a provider request or invoke prompt().
+    // Direct servers wait at startup; indirect servers wait at tool-call time.
+    // Exercise both native barriers without constructing a provider request.
     await session.extensionRunner.emitBeforeAgentStart('', undefined, { cwd, selectedTools: ['read'] });
+    if (exposure !== 'direct') {
+      const discovery = await session.extensionRunner.emitToolCall({
+        type: 'tool_call', toolName: 'tool_search', toolCallId: 'fixture-discovery',
+        input: { query: 'ping', limit: 1 },
+      });
+      assert.ok(!discovery?.block, 'selected discovery tool must reach the native connection barrier');
+    }
     assert.match(await readFile(logPath, 'utf8'), /tools\/list/, 'native MCP must complete fixture discovery');
     // Deliver a turn_end to the real runner-installed scope subscriber without a model turn.
     // This is the sole private SDK seam in the harness; scope/loader/registry are not replaced.

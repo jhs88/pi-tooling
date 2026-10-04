@@ -29,7 +29,8 @@ async function fixture(t) {
 
 async function patch(packageDir) {
   const { applySubagentsPatch } = await import('./subagents-patch.mjs');
-  return applySubagentsPatch(packageDir, '0.99.1');
+  const host = JSON.parse(await readFile(join(root, 'node_modules/@earendil-works/pi-coding-agent/package.json'), 'utf8'));
+  return applySubagentsPatch(packageDir, host.version);
 }
 
 for (const scenario of ['direct', 'isolated', 'no-extensions', 'builtin-disabled', 'plain-name', 'denylist', 'hidden', 'deferred', 'codemode', 'codemode-deferred', 'nested-native-scope']) {
