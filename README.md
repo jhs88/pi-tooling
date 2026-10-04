@@ -22,7 +22,7 @@ It also bundles `background-terminals` and `workflows` skills so Pi receives ope
 - Node.js and npm available to Pi's package manager
 - A self-hosted Firecrawl endpoint if the web-research tools will be used
 
-Development and compatibility checks currently use `@earendil-works/pi-coding-agent` 0.83.0.
+Development and compatibility checks currently use `@earendil-works/pi-coding-agent` 0.99.1.
 
 ## Install
 
@@ -47,6 +47,20 @@ pi update --all
 ```
 
 See [`docs/package-lifecycle.md`](docs/package-lifecycle.md) for dependency reconciliation and repair instructions.
+
+## Subagent native MCP compatibility
+
+Pi's CLI loads native MCP, but `@tintinweb/pi-subagents` 0.19.0 does not initialize it in SDK child sessions. This package provides an explicitly invoked compatibility patch, not a fork or an automatic install hook:
+
+```bash
+# From this development checkout:
+npm run compat:subagents -- --check
+npm run compat:subagents
+```
+
+The packaged command is `pi-subagents-compat` when this package's npm bin directory is on PATH. Pin the separate Pi package to `npm:@tintinweb/pi-subagents@0.19.0`. Reapply the patch after a reinstall or package reconciliation, then run `/reload`.
+
+The command checks the Pi version and reviewed package/source hashes before writing, backs up changed files, and is safe to repeat. Unknown releases or source changes fail closed. See [`compat/README.md`](compat/README.md) for tool selectors, isolated-session behavior, and updating or removing the patch.
 
 ## Configure Firecrawl
 
