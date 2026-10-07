@@ -14,6 +14,8 @@ A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/co
 
 The package supplements rather than replaces [`@tintinweb/pi-subagents`](https://www.npmjs.com/package/@tintinweb/pi-subagents).
 
+An optional [subagent compatibility layer](subagents/README.md) exposes `subagent`, `subagent_result`, `subagent_steer`, and an upstream-enabled `subagent_workflow`. It is disabled by default, requires the pinned subagents 0.19.0 package and Pi's public loadout and `ctx.executeTool` APIs, and provides permission-preserving forwarding and foreground progress fields for T3 without editing either dependency. Real RPC checks use Pi 1.0.3.
+
 It also bundles `background-terminals` and `workflows` skills so Pi receives operational guidance alongside the specialized tools they describe.
 
 ## Requirements

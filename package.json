@@ -28,7 +28,7 @@
   },
   "scripts": {
     "check": "tsc --noEmit -p .",
-    "test": "node --test --experimental-strip-types a2a/*.test.ts ask-user/*.test.ts background-terminals/*.test.ts compat/*.test.mjs file-search/*.test.ts firecrawl/*.test.ts integration/*.test.ts shared/*.test.ts workflows/*.test.ts",
+    "test": "node --test --experimental-strip-types a2a/*.test.ts ask-user/*.test.ts background-terminals/*.test.ts compat/*.test.mjs file-search/*.test.ts firecrawl/*.test.ts integration/*.test.ts shared/*.test.ts subagents/*.test.ts workflows/*.test.ts",
     "compat:subagents": "node scripts/patch-pi-subagents.mjs",
     "test:compat": "node --test compat/*.test.mjs",
     "verify": "npm run check && npm test",

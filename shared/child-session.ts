@@ -37,7 +37,17 @@ export const CHILD_EXCLUDED_TOOL_NAMES = [
 
 /** Fresh SDK options avoid turning the denylist into an accidental allowlist. */
 export function childToolPolicy() {
-  return { excludeTools: [...CHILD_EXCLUDED_TOOL_NAMES] };
+  // Keep the baseline list stable; aliases extend the effective SDK policy.
+  return {
+    excludeTools: [
+      ...CHILD_EXCLUDED_TOOL_NAMES,
+      "SubagentWorkflow",
+      "subagent",
+      "subagent_result",
+      "subagent_steer",
+      "subagent_workflow",
+    ],
+  };
 }
 
 export interface ChildResourceOptions {
