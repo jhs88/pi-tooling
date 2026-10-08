@@ -27,6 +27,10 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 import {
+  sanitizeTerminalLine,
+  sanitizeTerminalText,
+} from "../shared/terminal-text.ts";
+import {
   agentContext,
   countStates,
   formatElapsed,
@@ -685,7 +689,10 @@ export class WorkflowDashboard {
   private hintLine(hint: string, width: number): string {
     const theme = this.theme;
     if (this.notice)
-      return truncateToWidth(theme.fg("accent", ` ${this.notice}`), width);
+      return truncateToWidth(
+        theme.fg("accent", ` ${sanitizeTerminalLine(this.notice)}`),
+        width,
+      );
     return truncateToWidth(theme.fg("dim", ` ${hint}`), width);
   }
 
@@ -730,7 +737,7 @@ export class WorkflowDashboard {
       const selected = index === this.listIndex;
       const d = entry.details;
       const marker = selected ? theme.fg("accent", "❯") : " ";
-      const name = d.name ?? d.runId;
+      const name = sanitizeTerminalLine(d.name ?? d.runId);
       const label = selected
         ? theme.fg("accent", name)
         : theme.fg("text", name);
@@ -743,7 +750,7 @@ export class WorkflowDashboard {
         ) +
         theme.fg(statusColor(d.status), statusWord(d.status)) +
         " ";
-      const left = ` ${marker} ${statusSquareFor(d, theme)} ${label} ${theme.fg("dim", d.runId)}`;
+      const left = ` ${marker} ${statusSquareFor(d, theme)} ${label} ${theme.fg("dim", sanitizeTerminalLine(d.runId))}`;
       return this.split(left, right, width - 2);
     });
     lines.push(...this.panel("Runs", rows, width, panelHeight));
@@ -775,13 +782,17 @@ export class WorkflowDashboard {
       " ";
     lines.push(
       this.split(
-        " " + theme.bold(theme.fg("accent", d.name ?? d.runId)),
+        " " +
+          theme.bold(
+            theme.fg("accent", sanitizeTerminalLine(d.name ?? d.runId)),
+          ),
         right,
         width,
       ),
     );
     const totals = formatUsage(aggregateUsage(d.agents));
-    const subLeft = " " + theme.fg("muted", d.description ?? d.runId);
+    const subLeft =
+      " " + theme.fg("muted", sanitizeTerminalLine(d.description ?? d.runId));
     lines.push(
       this.split(subLeft, totals ? theme.fg("dim", `${totals} `) : " ", width),
     );
@@ -795,7 +806,10 @@ export class WorkflowDashboard {
     const bodyHeight = Math.max(0, panelHeight - 2);
 
     // Left: phases sidebar.
-    const maxTitle = Math.max(8, ...groups.map((g) => g.title.length));
+    const maxTitle = Math.max(
+      8,
+      ...groups.map((g) => sanitizeTerminalLine(g.title).length),
+    );
     const sidebarWidth = Math.min(
       Math.max(maxTitle + 12, 20),
       Math.floor(width / 3),
@@ -814,8 +828,8 @@ export class WorkflowDashboard {
       const square = groupSquare(group, theme);
       const title =
         selected && this.detailFocus === "phases"
-          ? theme.fg("accent", group.title)
-          : theme.fg("text", group.title);
+          ? theme.fg("accent", sanitizeTerminalLine(group.title))
+          : theme.fg("text", sanitizeTerminalLine(group.title));
       const counts =
         group.agents.length > 0
           ? theme.fg("dim", `${groupDone}/${group.agents.length} `)
@@ -830,7 +844,9 @@ export class WorkflowDashboard {
     if (selectedGroup) {
       const maxLabel = Math.max(
         0,
-        ...selectedGroup.agents.map((a) => a.label.length),
+        ...selectedGroup.agents.map(
+          (a) => sanitizeTerminalLine(a.label).length,
+        ),
       );
       const agentWindow = this.windowed(
         selectedGroup.agents,
@@ -847,11 +863,12 @@ export class WorkflowDashboard {
         const stats = [agent.model, agentContext(agent)]
           .filter(Boolean)
           .join(" · ");
+        const safeLabel = sanitizeTerminalLine(agent.label);
         const label =
           selected && this.detailFocus === "agents"
-            ? theme.fg("accent", agent.label.padEnd(Math.min(maxLabel, 40)))
-            : theme.fg("text", agent.label.padEnd(Math.min(maxLabel, 40)));
-        const left = ` ${marker} ${stateSquare(agent.state, theme)} ${label}  ${theme.fg("dim", stats)}`;
+            ? theme.fg("accent", safeLabel.padEnd(Math.min(maxLabel, 40)))
+            : theme.fg("text", safeLabel.padEnd(Math.min(maxLabel, 40)));
+        const left = ` ${marker} ${stateSquare(agent.state, theme)} ${label}  ${theme.fg("dim", sanitizeTerminalLine(stats))}`;
         const right = theme.fg(
           "dim",
           `${formatElapsed(agent.startedAt, agent.finishedAt)} `,
@@ -860,7 +877,7 @@ export class WorkflowDashboard {
         if (agent.error) {
           agentRows.push(
             truncateToWidth(
-              `       ${theme.fg("error", agent.error)}`,
+              `       ${theme.fg("error", sanitizeTerminalLine(agent.error))}`,
               agentsInner,
               "…",
             ),
@@ -875,7 +892,7 @@ export class WorkflowDashboard {
       agentRows.push("");
       agentRows.push(
         truncateToWidth(
-          ` ${theme.fg("error", `workflow error: ${d.error}`)}`,
+          ` ${theme.fg("error", `workflow error: ${sanitizeTerminalLine(d.error)}`)}`,
           agentsInner,
           "…",
         ),
@@ -884,7 +901,7 @@ export class WorkflowDashboard {
 
     const agentCount = selectedGroup?.agents.length ?? 0;
     const agentsTitle = selectedGroup
-      ? `${selectedGroup.title} · ${agentCount} agent${agentCount === 1 ? "" : "s"}`
+      ? `${sanitizeTerminalLine(selectedGroup.title)} · ${agentCount} agent${agentCount === 1 ? "" : "s"}`
       : "Agents";
     const leftPanel = this.panel(
       "Phases",
@@ -923,7 +940,7 @@ export class WorkflowDashboard {
     }
 
     for (const entry of agent.transcript) {
-      const label = transcriptLabel(entry);
+      const label = sanitizeTerminalLine(transcriptLabel(entry));
       const color = transcriptColor(entry);
       rows.push(
         ` ${theme.fg(color, SQUARE)} ${theme.bold(theme.fg(color, label))}`,
@@ -931,7 +948,7 @@ export class WorkflowDashboard {
       const contentWidth = Math.max(8, width - 4);
       const styled = theme.fg(
         entry.role === "thinking" ? "dim" : entry.isError ? "error" : "text",
-        entry.text,
+        sanitizeTerminalText(entry.text),
       );
       for (const line of wrapTextWithAnsi(styled, contentWidth)) {
         rows.push(`   ${line}`);
@@ -951,24 +968,31 @@ export class WorkflowDashboard {
     const lines: string[] = [];
     const right = theme.fg(
       "dim",
-      [
-        agent.model,
-        agentContext(agent),
-        formatElapsed(agent.startedAt, agent.finishedAt),
-      ]
-        .filter(Boolean)
-        .join(" · ") + " ",
+      sanitizeTerminalLine(
+        [
+          agent.model,
+          agentContext(agent),
+          formatElapsed(agent.startedAt, agent.finishedAt),
+        ]
+          .filter(Boolean)
+          .join(" · ") + " ",
+      ),
     );
     lines.push(
       this.split(
-        ` ${stateSquare(agent.state, theme)} ${theme.bold(theme.fg("accent", agent.label))}`,
+        ` ${stateSquare(agent.state, theme)} ${theme.bold(theme.fg("accent", sanitizeTerminalLine(agent.label)))}`,
         right,
         width,
       ),
     );
     lines.push(
       this.split(
-        ` ${theme.fg("muted", `${details.name ?? details.runId} · ${agent.phase ?? "unphased"}`)}`,
+        ` ${theme.fg(
+          "muted",
+          sanitizeTerminalLine(
+            `${details.name ?? details.runId} · ${agent.phase ?? "unphased"}`,
+          ),
+        )}`,
         theme.fg("dim", `${agent.transcript.length} entries `),
         width,
       ),

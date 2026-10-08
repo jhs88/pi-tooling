@@ -118,6 +118,34 @@ test("sandbox rejects unawaited agent calls", async () => {
   assert.equal(calls, 0);
 });
 
+test("sandbox source cannot escape the host accounting wrapper", async () => {
+  let calls = 0;
+  await assert.rejects(
+    run(
+      `}), agent("orphan"), Promise.resolve("bypass"); (async function () {`,
+      {
+        onAgent: async () => {
+          calls++;
+          return { ok: true, output: "unexpected" };
+        },
+      },
+    ),
+    /unawaited agent/,
+  );
+  assert.equal(calls, 0);
+});
+
+test("sandbox compilation boundary preserves workflow arguments", async () => {
+  assert.equal(await run(`return arguments.length;`), 4);
+});
+
+test("sandbox rejects phase IPC payloads above the UTF-8 byte limit", async () => {
+  await assert.rejects(
+    run(`phase("é".repeat(2100)); return "done";`),
+    /invalid phase update/,
+  );
+});
+
 test("sandbox VM still rejects non-yielding synchronous code", async () => {
   await assert.rejects(run(`while (true) {}`), /timed out/);
 });

@@ -17,6 +17,10 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import {
+  sanitizeTerminalLine,
+  sanitizeTerminalText,
+} from "../shared/terminal-text.ts";
+import {
   ASK_USER_PARAMETER_DESCRIPTIONS,
   ASK_USER_PROMPT_GUIDELINES,
   ASK_USER_PROMPT_SNIPPET,
@@ -214,7 +218,10 @@ export default function askUser(pi: ExtensionAPI): void {
             const add = (line: string) => lines.push(truncateToWidth(line, width));
             const title = " Question ";
             add(theme.fg("accent", `─${title}${"─".repeat(Math.max(0, width - title.length - 1))}`));
-            for (const line of wrapText(params.question, Math.max(10, width - 2))) {
+            for (const line of wrapText(
+              sanitizeTerminalText(params.question),
+              Math.max(10, width - 2),
+            )) {
               add(` ${theme.fg("text", theme.bold(line))}`);
             }
             lines.push("");
@@ -227,8 +234,18 @@ export default function askUser(pi: ExtensionAPI): void {
                 : option.isOther
                   ? "muted"
                   : "text";
-              add(prefix + theme.fg(color, `${marker} ${option.label}`));
-              if (option.description) add(`      ${theme.fg("muted", option.description)}`);
+              add(
+                prefix +
+                  theme.fg(
+                    color,
+                    `${marker} ${sanitizeTerminalLine(option.label)}`,
+                  ),
+              );
+              if (option.description) {
+                add(
+                  `      ${theme.fg("muted", sanitizeTerminalLine(option.description))}`,
+                );
+              }
             });
             if (editMode) {
               lines.push("");
@@ -267,9 +284,17 @@ export default function askUser(pi: ExtensionAPI): void {
 
     renderCall(args, theme) {
       let text = theme.fg("toolTitle", theme.bold("ask_user "));
-      text += theme.fg("muted", args.question);
+      text += theme.fg("muted", sanitizeTerminalText(args.question));
       if (args.options.length > 0) {
-        text += `\n${theme.fg("dim", `  ${args.options.map((option, index) => `${index + 1}. ${option.label}`).join("  ")}`)}`;
+        text += `\n${theme.fg(
+          "dim",
+          `  ${args.options
+            .map(
+              (option, index) =>
+                `${index + 1}. ${sanitizeTerminalLine(option.label)}`,
+            )
+            .join("  ")}`,
+        )}`;
       }
       return new Text(text, 0, 0);
     },
@@ -278,20 +303,30 @@ export default function askUser(pi: ExtensionAPI): void {
       const details = result.details as AskUserDetails | undefined;
       if (!details) {
         const first = result.content[0];
-        return new Text(first?.type === "text" ? first.text : "", 0, 0);
+        return new Text(
+          first?.type === "text" ? sanitizeTerminalText(first.text) : "",
+          0,
+          0,
+        );
       }
       if (details.outcome === "aborted") return new Text(theme.fg("warning", "■ aborted"), 0, 0);
       if (details.outcome === "dismissed") return new Text(theme.fg("warning", "✗ dismissed"), 0, 0);
       if (details.outcome === "no-ui") return new Text(theme.fg("muted", "terminal UI unavailable"), 0, 0);
       if (details.wasCustom) {
         return new Text(
-          theme.fg("success", "✓ ") + theme.fg("muted", "(wrote) ") + theme.fg("accent", details.answer ?? ""),
+          theme.fg("success", "✓ ") +
+            theme.fg("muted", "(wrote) ") +
+            theme.fg("accent", sanitizeTerminalText(details.answer ?? "")),
           0,
           0,
         );
       }
       return new Text(
-        theme.fg("success", "✓ ") + theme.fg("accent", `${details.index}. ${details.answer}`),
+        theme.fg("success", "✓ ") +
+          theme.fg(
+            "accent",
+            `${details.index}. ${sanitizeTerminalText(details.answer ?? "")}`,
+          ),
         0,
         0,
       );
