@@ -13,8 +13,19 @@ type Schema = TSchema & { required?: string[]; properties: Record<string, TSchem
 type Definition = Omit<ToolDefinition<TSchema, unknown>, "execute"> & { execute?: ToolDefinition<TSchema, unknown>["execute"] };
 function schema(tool: Definition): Schema { return tool.parameters as Schema; }
 
+type HostOptions = {
+  modern?: boolean;
+  callable?: boolean;
+  workflow?: boolean;
+  version?: string;
+  originalsFirst?: boolean;
+  collision?: string;
+  deny?: string;
+  compat?: string;
+};
+
 /** Faithful public nested dispatch fixture, including outcome errors and IDs. */
-function host({ modern = true, callable = true, workflow = true, version = "0.19.0", originalsFirst = true, collision = "", deny = "" } = {}) {
+function host({ modern = true, callable = true, workflow = true, version = "0.19.0", originalsFirst = true, collision = "", deny = "", compat }: HostOptions = {}) {
   const directory = mkdtempSync(join(tmpdir(), "subagent-tools-"));
   mkdirSync(join(directory, "src"));
   writeFileSync(join(directory, "package.json"), JSON.stringify({ name: "@tintinweb/pi-subagents", version }));
@@ -67,7 +78,8 @@ function host({ modern = true, callable = true, workflow = true, version = "0.19
     });
   }
   const previous = process.env.PI_TOOLING_SUBAGENTS_COMPAT;
-  process.env.PI_TOOLING_SUBAGENTS_COMPAT = "1";
+  if (compat === undefined) delete process.env.PI_TOOLING_SUBAGENTS_COMPAT;
+  else process.env.PI_TOOLING_SUBAGENTS_COMPAT = compat;
   try {
     if (collision) api.registerTool({ name: collision, label: collision, description: "Unrelated first-wins tool", parameters: Type.Object({ unrelated: Type.String() }), async execute() { return { content: [], details: {} }; } });
     if (originalsFirst) addOriginals();
@@ -86,12 +98,22 @@ function host({ modern = true, callable = true, workflow = true, version = "0.19
   return { tools, handlers, calls, hookCalls, active: () => active, declared: () => declared, invoke, context, api, directory, close() { rmSync(directory, { recursive: true, force: true }); } };
 }
 
-test("compatibility is disabled by default and leaves registration untouched", () => {
-  const previous = process.env.PI_TOOLING_SUBAGENTS_COMPAT;
-  delete process.env.PI_TOOLING_SUBAGENTS_COMPAT;
+for (const compat of [undefined, "1"]) test(`compatibility enables aliases with switch ${compat ?? "unset"}`, () => {
+  const h = host({ compat });
   try {
-    register({ registerTool() { assert.fail("unexpected tool"); }, on() { assert.fail("unexpected handler"); } } as unknown as ExtensionAPI);
-  } finally { if (previous !== undefined) process.env.PI_TOOLING_SUBAGENTS_COMPAT = previous; }
+    h.handlers.get("session_start")!();
+    assert.deepEqual(h.declared().sort(), Object.values(TOOL_ALIASES).sort());
+    assert.deepEqual(h.active().sort(), [...Object.keys(TOOL_ALIASES), ...Object.values(TOOL_ALIASES)].sort());
+  } finally { h.close(); }
+});
+
+for (const compat of ["0", "true", "false", ""]) test(`explicit switch ${JSON.stringify(compat)} disables compatibility without changing originals`, () => {
+  const h = host({ compat });
+  try {
+    assert.equal(h.handlers.size, 0);
+    assert.deepEqual(h.declared().sort(), Object.keys(TOOL_ALIASES).sort());
+    assert.deepEqual([...h.tools.keys()].sort(), Object.keys(TOOL_ALIASES).sort());
+  } finally { h.close(); }
 });
 
 for (const originalsFirst of [true, false]) test(`aliases use supported nested dispatch, originals callable but hidden, load order ${originalsFirst}`, async () => {

@@ -13,7 +13,7 @@ for (const alias of Object.values(TOOL_ALIASES)) test(`real SDK first-wins ${ali
   const previous = process.env.PI_TOOLING_SUBAGENTS_COMPAT;
   let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
   try {
-    process.env.PI_TOOLING_SUBAGENTS_COMPAT = "1";
+    delete process.env.PI_TOOLING_SUBAGENTS_COMPAT;
     const agentDir = join(root, "agent");
     const pinnedRoot = join(root, "pinned");
     await mkdir(pinnedRoot);
@@ -54,14 +54,14 @@ for (const { deny, redact, scenario } of [
   { deny: "", redact: "get_subagent_result", scenario: "REDACT_RESULT_BACKGROUND" },
   { deny: "", redact: "Agent", scenario: "REDACT_ORIGINAL_ERROR" },
   { deny: "", redact: "get_subagent_result", scenario: "REDACT_RESULT_BACKGROUND_ERROR" },
-]) test(`real Pi 1.0.2 SDK + pinned extension respects ${deny || scenario || "normal execution"}`, async () => {
+]) test(`real Pi 1.1.0 SDK + default-on pinned extension respects ${deny || scenario || "normal execution"}`, async () => {
   const root = await mkdtemp(join(tmpdir(), "subagent-sdk-permission-"));
   const saved = new Map(["PI_TOOLING_SUBAGENTS_COMPAT", "PI_CODING_AGENT_DIR", "SUBAGENT_FIXTURE_DENY_NAME", "SUBAGENT_FIXTURE_REDACT_NAME"].map((key) => [key, process.env[key]]));
   let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
   try {
     const agentDir = join(root, "agent");
     await mkdir(agentDir);
-    process.env.PI_TOOLING_SUBAGENTS_COMPAT = "1";
+    delete process.env.PI_TOOLING_SUBAGENTS_COMPAT;
     process.env.PI_CODING_AGENT_DIR = agentDir;
     if (deny) process.env.SUBAGENT_FIXTURE_DENY_NAME = deny; else delete process.env.SUBAGENT_FIXTURE_DENY_NAME;
     if (redact) process.env.SUBAGENT_FIXTURE_REDACT_NAME = redact; else delete process.env.SUBAGENT_FIXTURE_REDACT_NAME;

@@ -70,7 +70,8 @@ export function isPinnedSubagentsSource(path: string): boolean {
 }
 
 export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
-  if (process.env.PI_TOOLING_SUBAGENTS_COMPAT !== "1") return;
+  const compatibility = process.env.PI_TOOLING_SUBAGENTS_COMPAT;
+  if (compatibility !== undefined && compatibility !== "1") return;
 
   const candidates = new Map<string, RegisteredTool>();
   const approved = new Set<string>();
