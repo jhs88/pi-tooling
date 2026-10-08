@@ -4,7 +4,7 @@ This adapter is new code. It forwards to registered originals through the public
 
 ## Current baseline
 
-Development dependencies now pin the Pi host packages to 1.1.0, which supports native llama.cpp decision models. The naming adapter is enabled when `PI_TOOLING_SUBAGENTS_COMPAT` is unset; an explicit `1` remains supported, and other explicitly set values disable it. Source-version, activation, collision, execution-context and permission checks are unchanged. SDK tests exercise the default without setting a switch. The real Pi 1.1.0 RPC smoke verifies default-on behavior, explicit opt-out and the retained `1`. These checks do not execute T3 or establish model quality.
+Development dependencies now pin the Pi host packages to 1.1.0, which supports native llama.cpp decision models. The naming adapter is enabled when `PI_TOOLING_SUBAGENTS_COMPAT` is unset; an explicit `1` remains supported, and other explicitly set values disable it. Source-version, activation, collision, execution-context and permission checks are unchanged. The repository owner has tested T3 and confirmed that the subagent tools appear in its UI.
 
 The older Pi versions and line references below record the original review, not the current dependency pins. The separately reviewed subagents release remains 0.19.0. Its native MCP patch still requires explicit application.
 
@@ -41,7 +41,7 @@ Pi 0.83.0's `ExtensionAPI.getAllTools()` returns `ToolInfo`, a pick of metadata 
 
 The installed Pi 1.0.3 API exposes `ToolDefinition.prepareLoadout(loadout)` and `ToolLoadout.registered: readonly AgentTool[]`. `dist/core/tools/tool-definition-wrapper.js` shows that these registered tools have already been bound to their original extension context. The adapter uses registered metadata only for schema copying and eligibility. Execution goes through `ExtensionToolContext.executeTool`, which runs the original with a nested call ID and its bound context. The public hook hides original declarations while keeping originals active and callable. Feature detection leaves aliases inactive on metadata-only hosts; a missing execution context fails closed with no raw-executor fallback.
 
-The original worker branch typechecked against Pi 0.83.0 with a structural representation of the newer hook. That was historical development evidence, not the final baseline. This PR worktree is based on main `82c2e0dd5c7afb712046473d6f8c82041bacfbc3` and pins Pi 1.0.2 development packages. It uses the actual exported `ToolDefinition`, `ToolLoadout`, `AgentToolResult`, update callback and event-bus types. Runtime RPC checks use the installed Pi 1.0.3 CLI. Both 1.0.2 and 1.0.3 expose the loadout and nested-tool APIs described here. SHA-256 comparison found their reviewed `tool-definition-wrapper.js`, `agent-session.js` and `extensions/types.d.ts` files byte-identical.
+The original adapter review used Pi 1.0.2 development packages and the Pi 1.0.3 CLI. Both exposed the loadout and nested-tool APIs described here. SHA-256 comparison found their reviewed `tool-definition-wrapper.js`, `agent-session.js` and `extensions/types.d.ts` files byte-identical.
 
 ## Permission-hook boundary
 
@@ -73,10 +73,6 @@ Pinned `src/index.ts:410-417,641-647,2284-2297` gates reporting with `reportUsag
 
 Pi's `dist/core/extensions/runner.js:410-420` uses first-wins registration. The adapter checks its alias schema object identity before changing the active set, hiding originals or copying schemas. SDK integration tests exercise all four collisions against the actual 1.0.2 host. `dist/core/resource-loader.js:578-584,969-986` keeps both extensions and reports a collision diagnostic; the 1.0.3 CLI treats that diagnostic as a startup failure. The RPC collision probe verifies that fail-closed CLI behavior. The adapter does not suppress host diagnostics or promise CLI startup with colliding extensions.
 
-## T3 and upstream repository references
+## T3 reference
 
-The external T3 contract supplied for this work is PiAdapterV2 at `0678e4e23d8675ef88f9ac08e1ae90cfe7d6ef2e`. No T3 source was changed. The smoke verifies Pi's emitted JSONL fields against that contract; it does not execute T3.
-
-The final scratch PR worktree starts at main `82c2e0dd5c7afb712046473d6f8c82041bacfbc3`. Main already contains the native-MCP compatibility work, Pi 1.0.2 dependency update, narrow Effect imports and Firecrawl security update. The adapter-only entry-point, test-script and child-policy edits were applied to this baseline. This feature does not reintroduce the older worker branch's unrelated hardening or dependency changes.
-
-Earlier main-baseline checks passed the complete suite and production package loader check, and a locally packed artifact passed the real Pi package manager and RPC fixture smoke. Those were packaging checks before the independent-review fixes. The current review verification runs `npm ci`, `npm run verify` and the full local entry point through the real 1.0.3 RPC CLI with the exact pinned dependency. No model inference, live installation, T3 source or global Pi skill change is part of that verification.
+The reviewed T3 contract is PiAdapterV2 at `0678e4e23d8675ef88f9ac08e1ae90cfe7d6ef2e`. No T3 source was changed. The repository owner has confirmed subagent tool visibility in T3's UI.

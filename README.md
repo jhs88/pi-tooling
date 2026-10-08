@@ -14,7 +14,7 @@ A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/co
 
 The package supplements rather than replaces [`@tintinweb/pi-subagents`](https://www.npmjs.com/package/@tintinweb/pi-subagents).
 
-The [subagent compatibility layer](subagents/README.md) exposes `subagent`, `subagent_result`, `subagent_steer`, and an upstream-enabled `subagent_workflow` by default on supported hosts. No environment switch is needed, including when T3 launches Pi. It requires the pinned subagents 0.19.0 package and Pi's public loadout and `ctx.executeTool` APIs. It preserves permissions and supplies foreground progress fields for T3 without editing either dependency. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable it. Real RPC checks use Pi 1.1.0.
+The [subagent compatibility layer](subagents/README.md) exposes `subagent`, `subagent_result`, `subagent_steer`, and an upstream-enabled `subagent_workflow` by default on supported hosts. No environment switch is needed, including when T3 launches Pi. It requires the pinned subagents 0.19.0 package and Pi's public loadout and `ctx.executeTool` APIs. It preserves permissions and supplies foreground progress fields for T3 without editing either dependency. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable it. The repository owner has confirmed subagent tool visibility in T3's UI.
 
 It also bundles `background-terminals` and `workflows` skills so Pi receives operational guidance alongside the specialized tools they describe.
 
@@ -24,7 +24,7 @@ It also bundles `background-terminals` and `workflows` skills so Pi receives ope
 - Node.js and npm available to Pi's package manager
 - A self-hosted Firecrawl endpoint if the web-research tools will be used
 
-Development and compatibility checks pin the Pi host packages to 1.1.0. This baseline supports native llama.cpp decision models. Their router must be llama.cpp 0.6.0 or newer and advertise `decisions` in `architecture.output_modalities`. Pi host packages remain wildcard peers, as required for managed packages.
+Development dependencies pin the Pi host packages to 1.1.0. This baseline supports native llama.cpp decision models. Their router must be llama.cpp 0.6.0 or newer and advertise `decisions` in `architecture.output_modalities`. Pi host packages remain wildcard peers, as required for managed packages.
 
 ## Install
 
