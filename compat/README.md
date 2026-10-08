@@ -1,6 +1,6 @@
 # Subagents native MCP patch
 
-Supported third-party package: `@tintinweb/pi-subagents@0.19.0`. Verified host: Pi 1.0.2. The command requires Pi 0.99.1 or newer; newer host releases still need compatibility testing.
+Supported third-party package: `@tintinweb/pi-subagents@0.19.0`. Verified host: Pi 1.1.0. This standalone native MCP patch command retains its Pi 0.99.1 minimum; the current Pi Tooling development and decision-model baseline is 1.1.0. Other host releases still need compatibility testing.
 
 This is a small reviewed patch to a separately managed package. It does not replace the package, install dependencies, or run automatically during installation or session startup.
 

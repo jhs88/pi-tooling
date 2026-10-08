@@ -2,6 +2,12 @@
 
 This adapter is new code. It forwards to registered originals through the public tool pipeline at runtime and does not vendor or modify tintinweb source.
 
+## Current baseline
+
+Development dependencies now pin the Pi host packages to 1.1.0, which supports native llama.cpp decision models. The naming adapter is enabled when `PI_TOOLING_SUBAGENTS_COMPAT` is unset; an explicit `1` remains supported, and other explicitly set values disable it. Source-version, activation, collision, execution-context and permission checks are unchanged. SDK tests exercise the default without setting a switch. The real Pi 1.1.0 RPC smoke verifies default-on behavior, explicit opt-out and the retained `1`. These checks do not execute T3 or establish model quality.
+
+The older Pi versions and line references below record the original review, not the current dependency pins. The separately reviewed subagents release remains 0.19.0. Its native MCP patch still requires explicit application.
+
 ## Exact dependency reviewed
 
 The source inspected was the npm tarball for `@tintinweb/pi-subagents@0.19.0`, obtained with `npm pack @tintinweb/pi-subagents@0.19.0`. This was not a review of the dependency's moving main branch.

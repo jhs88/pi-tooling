@@ -8,7 +8,7 @@ import { Type } from "typebox";
 import { childToolPolicy, createChildModelRuntime, bindChildSessionExtensions, shutdownAndDisposeChildSession } from "../shared/child-session.ts";
 import { TOOL_ALIASES } from "./index.ts";
 
-test("real SDK child policy excludes all opt-in aliases and upstream workflow without disabling ordinary extension tools", async () => {
+test("real SDK child policy excludes all default-on aliases and upstream workflow without disabling ordinary extension tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "subagent-child-policy-"));
   let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
   try {

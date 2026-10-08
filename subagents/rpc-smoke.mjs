@@ -20,9 +20,10 @@ assert.equal(manifest.name, "@tintinweb/pi-subagents"); assert.equal(manifest.ve
 const root = options["--artifact-dir"] ? resolve(options["--artifact-dir"]) : await mkdtemp(join(tmpdir(), "pi-subagents-rpc-"));
 await mkdir(root, { recursive: true });
 
-for (const { enabled, workflows, reverse, scenario } of [
+for (const { enabled, workflows, reverse, scenario, compat } of [
   { enabled: false, workflows: false, reverse: false, scenario: "" },
   { enabled: true, workflows: false, reverse: false, scenario: "" },
+  { enabled: true, workflows: false, reverse: false, scenario: "", compat: "1" },
   { enabled: true, workflows: true, reverse: true, scenario: "" },
   { enabled: true, workflows: false, reverse: false, scenario: "BACKGROUND" },
   { enabled: true, workflows: false, reverse: false, scenario: "CANCEL" },
@@ -39,7 +40,7 @@ for (const { enabled, workflows, reverse, scenario } of [
   { enabled: true, workflows: false, reverse: false, scenario: "REDACT_RESULT_BACKGROUND_ERROR" },
 ]) {
   const redacted = scenario.startsWith("REDACT_");
-  const laneName = enabled ? scenario ? `enabled-${scenario.toLowerCase()}` : workflows ? "enabled-workflow-reversed" : "enabled" : "disabled";
+  const laneName = enabled ? scenario ? `enabled-${scenario.toLowerCase()}` : workflows ? "enabled-workflow-reversed" : compat ? "enabled-explicit-switch" : "enabled" : "disabled";
   const lane = join(root, laneName);
   const agentDir = join(lane, "agent"); const cwd = join(lane, "workspace");
   await mkdir(agentDir, { recursive: true }); await mkdir(cwd, { recursive: true });
@@ -55,7 +56,8 @@ for (const { enabled, workflows, reverse, scenario } of [
   delete env.SUBAGENT_FIXTURE_REDACT_NAME;
   if (redacted) env.SUBAGENT_FIXTURE_REDACT_NAME = scenario.includes("BACKGROUND") ? "get_subagent_result" : "Agent";
   if (scenario.startsWith("PERMISSION_")) env.SUBAGENT_FIXTURE_DENY_NAME = scenario === "PERMISSION_ALIAS" ? "subagent" : scenario === "PERMISSION_RESULT_BACKGROUND" ? "get_subagent_result" : "Agent";
-  if (enabled) env.PI_TOOLING_SUBAGENTS_COMPAT = "1";
+  if (!enabled) env.PI_TOOLING_SUBAGENTS_COMPAT = "0";
+  else if (compat !== undefined) env.PI_TOOLING_SUBAGENTS_COMPAT = compat;
   const child = spawn(options["--pi"] ?? "pi", ["--mode", "rpc", "--no-session", "--offline", "--no-skills", "--no-prompt-templates", "--no-context-files", "--model", "subagent-fixture/deterministic"], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
   const events = []; const raw = []; let stderr = ""; const waiters = [];
   const lines = createInterface({ input: child.stdout });
@@ -229,7 +231,7 @@ for (const { enabled, workflows, reverse, scenario } of [
       assert.equal(rerun.parentDeclarations.includes("Agent"), false);
       assert.equal(rerun.parentDeclarations.includes("subagent"), true);
     }
-    console.log(JSON.stringify({ lane: laneName, toolName, aliasesExecuted: aliasNames, updates: updates.length, childStreams: settled.childStreams, nestedCalls: settled.hookParents.filter((hook) => hook.parentToolCallId).length, tokens: stats.tokens, cost: stats.cost, terminal: true, backend: "deterministic fixture, no inference" }));
+    console.log(JSON.stringify({ lane: laneName, compatibilitySwitch: env.PI_TOOLING_SUBAGENTS_COMPAT ?? "unset", toolName, aliasesExecuted: aliasNames, updates: updates.length, childStreams: settled.childStreams, nestedCalls: settled.hookParents.filter((hook) => hook.parentToolCallId).length, tokens: stats.tokens, cost: stats.cost, terminal: true, backend: "deterministic fixture, no inference" }));
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => { if (child.exitCode !== null || child.signalCode !== null) resolve(); else child.once("exit", resolve); });

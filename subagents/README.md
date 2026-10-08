@@ -1,8 +1,8 @@
-# Opt-in subagent compatibility
+# Default-on subagent compatibility
 
-This layer is off by default. Set `PI_TOOLING_SUBAGENTS_COMPAT=1` in the environment of the Pi process to enable it. Other values, including `true`, leave it off. Restart Pi after changing the switch. Both alias-name and original-name permission hooks run through Pi's supported tool pipeline. Existing original-name rules still apply; an alias does not bypass an original deny rule.
+This layer is enabled by default on supported hosts. Pi and T3 need no opt-in environment variable. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable it and restart Pi after changing the switch. An explicit `1` remains supported; other explicitly set values, including `true` and an empty string, disable it as before. Both alias-name and original-name permission hooks run through Pi's supported tool pipeline. Existing original-name rules still apply; an alias does not bypass an original deny rule.
 
-Supported third-party package: `@tintinweb/pi-subagents@0.19.0`. The real RPC checks use Pi 1.0.3. The adapters require public `ToolDefinition.prepareLoadout` with registered/callable tool inventories and `ExtensionToolContext.executeTool`. Pi 0.83.0 has only tool metadata in `getAllTools()` and cannot enable these adapters. On an unsupported host, an absent dependency, an unsupported dependency version, or an unavailable original executor, the original tools remain available and the affected aliases are inactive.
+Supported third-party package: `@tintinweb/pi-subagents@0.19.0`. The real SDK and RPC checks use Pi 1.1.0. The adapters require public `ToolDefinition.prepareLoadout` with registered/callable tool inventories and `ExtensionToolContext.executeTool`. Pi 0.83.0 has only tool metadata in `getAllTools()` and cannot enable these adapters. On an unsupported host, an absent dependency, an unsupported dependency version, or an unavailable original executor, the original tools remain available and the affected aliases are inactive.
 
 | Original tool | Enabled tool | Behavior |
 | --- | --- | --- |
@@ -61,20 +61,9 @@ Use a reviewed local source artifact before changing the managed Git installatio
 
    The filename follows the artifact's package version; use the actual filename printed by `npm pack`, especially after rebasing onto a newer package version. Configure provider authentication through Pi's login UI in the test configuration if needed. Do not copy credentials into an artifact or commit them.
 
-3. Start the test Pi or T3 backend from an environment with the switch set. For a T3-managed Pi process, the variable must reach the backend that launches Pi, not just a separate terminal.
+3. Start the test Pi or T3 backend with `PI_TOOLING_SUBAGENTS_COMPAT` unset. The installed adapter enables itself when the supported original tools are available. No launcher or backend environment change is required.
 
-   ```bash
-   export PI_TOOLING_SUBAGENTS_COMPAT=1
-   # Launch the test Pi process or T3 backend from this environment.
-   ```
-
-   PowerShell equivalent:
-
-   ```powershell
-   $env:PI_TOOLING_SUBAGENTS_COMPAT = "1"
-   ```
-
-4. Load the prepared local skills containing the new tool references only in this enabled test configuration. Do not activate those skill edits globally until the adapter is verified. No naming-migration section is needed in `APPEND_SYSTEM.md` or other model instructions.
+4. Load the prepared local skills containing the new tool references only after confirming the aliases in this test configuration. Do not activate those skill edits globally until the adapter is verified. No naming-migration section is needed in `APPEND_SYSTEM.md` or other model instructions.
 5. Confirm active/callable inventories contain aliases and originals. Confirm the actual parent provider declarations contain `subagent`, `subagent_result`, and `subagent_steer`, not the hidden originals. An active-tool listing alone does not prove declaration hiding. Confirm optional `subagent_workflow` is declared only when the upstream workflow is enabled, and the separate `workflow` still appears. Install a test deny hook for `Agent` and another for `subagent` in separate runs. Each must reject before a child starts.
 6. In T3, request one bounded child task with `subagent`, foreground mode, and a read-only agent. Check live text updates, one stable child card, the real final result, and failure/cancellation behavior. A background request must fail before spawning anything. Then check `/reload` or a process restart and repeat tool discovery.
 
@@ -82,7 +71,7 @@ Do not merge or release on the strength of the fixture smoke alone. Actual T3 re
 
 ## Roll back
 
-Unset `PI_TOOLING_SUBAGENTS_COMPAT` and restart the Pi process and T3 backend. In PowerShell, use `Remove-Item Env:PI_TOOLING_SUBAGENTS_COMPAT`. Remove the local test artifact from the test configuration with `pi remove` using the same source passed to `pi install`, or discard the isolated test configuration. Restore the original tool references in the test skills when returning to the original tools. The separate pinned subagents package was never edited, so no dependency patch rollback is needed.
+Set `PI_TOOLING_SUBAGENTS_COMPAT=0` and restart the Pi process and T3 backend. In PowerShell, use `$env:PI_TOOLING_SUBAGENTS_COMPAT = "0"`. Unsetting the variable enables the adapter again on supported hosts. Remove the local test artifact from the test configuration with `pi remove` using the same source passed to `pi install`, or discard the isolated test configuration. Restore the original tool references in the test skills when returning to the original tools. The separate pinned subagents package was never edited, so no dependency patch rollback is needed.
 
 ## Model-free verification
 
@@ -99,4 +88,4 @@ node subagents/rpc-smoke.mjs \
 
 Optional arguments are `--pi=/path/to/pi` and `--extension=/path/to/local-or-installed/pi-tooling/index.ts`. The smoke writes isolated settings, sessions and evidence only below its artifact directory. It leaves JSONL and stderr logs for review. Never pass a live agent directory as the artifact directory.
 
-Checks cover disabled originals, enabled aliases, reversed load order, optional workflow absence/presence, actual result and steering executors, a no-child workflow, real `/reload`, joined agent-frontmatter background mode, cancellation, child failure, explicit background rejection, nonzero usage reported once in actual session stats, original-name and alias-name deny assertions with zero child starts, a denied joined result-read assertion, bounded nested original events carrying `parentToolCallId`, hidden provider declarations versus active inventory, fail-closed CLI collision startup, terminal liveness, and T3-compatible update/end fields. Unit and SDK tests under `subagents/*.test.ts` cover failure cleanup, schemas and argument forwarding, availability, session shutdown and child exclusion. The real Pi 1.0.2 SDK tests load the exact pinned extension and deterministic provider, execute a normal child, and separately deny `Agent` and `subagent` with zero child starts. They also verify the host's bounded nested-call record and single usage charge. No fixture backend is registered by the production extension.
+Checks cover originals under explicit opt-out, default-on aliases with no environment switch, the retained explicit `1`, reversed load order, optional workflow absence/presence, actual result and steering executors, a no-child workflow, real `/reload`, joined agent-frontmatter background mode, cancellation, child failure, explicit background rejection, nonzero usage reported once in actual session stats, original-name and alias-name deny assertions with zero child starts, a denied joined result-read assertion, bounded nested original events carrying `parentToolCallId`, hidden provider declarations versus active inventory, fail-closed CLI collision startup, terminal liveness, and T3-compatible update/end fields. Unit and SDK tests under `subagents/*.test.ts` cover failure cleanup, schemas and argument forwarding, availability, session shutdown and child exclusion. The real Pi 1.1.0 SDK tests load the exact pinned extension and deterministic provider, execute a normal child, and separately deny `Agent` and `subagent` with zero child starts. They also verify the host's bounded nested-call record and single usage charge. No fixture backend is registered by the production extension.
