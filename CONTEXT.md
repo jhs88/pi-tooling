@@ -1,6 +1,6 @@
 # Pi Tooling
 
-This repository owns the managed Pi package installed from `git:github.com/jhs88/pi-tooling`. It packages selected file-search, Firecrawl, interaction, background-process, and bounded workflow capabilities with reproducible runtime dependencies.
+This repository owns the managed Pi package installed from `git:github.com/jhs88/pi-tooling`. It packages selected file-search, Firecrawl, interaction, background-process, A2A, and subagent compatibility capabilities with reproducible runtime dependencies.
 
 ## Language
 
@@ -29,14 +29,15 @@ An explicitly requested, phased orchestration graph that can fan work out and co
 _Avoid_: automatic delegation, ultracode
 
 **Workflow child**:
-An isolated agent session created by a workflow and prohibited from recursively invoking orchestration.
+A child created by the separately installed subagents plugin. Its lifecycle, tools, and scheduling follow that plugin and the selected agent definition.
 _Avoid_: nested orchestrator
 
 ## Invariants
 
 - Third-party runtime modules belong in `dependencies`; Pi host APIs belong in `peerDependencies`.
 - Firecrawl requires an explicit self-hosted HTTP(S) endpoint and never falls back to Firecrawl Cloud.
-- Workflow fan-out is bounded to three children and cannot recurse into delegation or workflow tools.
+- Workflows and native MCP child initialization belong to the separate subagents plugin. Do not maintain a second workflow engine, resource cap, or source patch here.
+- Standalone A2A children retain their independent tool policy; workflow ownership does not remove those restrictions.
 - Background terminals are non-interactive, session-owned, output-bounded, redacted, and process-tree terminated.
 - `@tintinweb/pi-subagents` remains a separate managed Pi package; this package supplements rather than replaces it.
 - Hermes Kanban board `pi-tooling` owns active planning and task state. `docs/history/` is evidence, not an active tracker.

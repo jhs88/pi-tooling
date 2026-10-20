@@ -7,16 +7,17 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
+import { setTimeout as delay } from "node:timers/promises";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const options = Object.fromEntries(process.argv.slice(2).map((arg) => {
   const index = arg.indexOf("="); if (index < 0) throw new Error("Use --option=value");
   return [arg.slice(0, index), arg.slice(index + 1)];
 }));
-if (!options["--package-dir"]) throw new Error("--package-dir must point to a scratch installation of @tintinweb/pi-subagents@0.19.0");
+if (!options["--package-dir"]) throw new Error("--package-dir must point to a scratch installation of @tintinweb/pi-subagents@0.22.0");
 const packageDir = resolve(options["--package-dir"]);
 const manifest = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
-assert.equal(manifest.name, "@tintinweb/pi-subagents"); assert.equal(manifest.version, "0.19.0");
+assert.equal(manifest.name, "@tintinweb/pi-subagents"); assert.equal(manifest.version, "0.22.0");
 const root = options["--artifact-dir"] ? resolve(options["--artifact-dir"]) : await mkdtemp(join(tmpdir(), "pi-subagents-rpc-"));
 await mkdir(root, { recursive: true });
 
@@ -25,6 +26,9 @@ for (const { enabled, workflows, reverse, scenario, compat } of [
   { enabled: true, workflows: false, reverse: false, scenario: "" },
   { enabled: true, workflows: false, reverse: false, scenario: "", compat: "1" },
   { enabled: true, workflows: true, reverse: true, scenario: "" },
+  { enabled: true, workflows: true, reverse: false, scenario: "DEFAULT_WORKFLOW" },
+  { enabled: true, workflows: true, reverse: false, scenario: "WORKFLOW_FANOUT" },
+  { enabled: true, workflows: false, reverse: false, scenario: "WORKFLOW_COLLISION" },
   { enabled: true, workflows: false, reverse: false, scenario: "BACKGROUND" },
   { enabled: true, workflows: false, reverse: false, scenario: "CANCEL" },
   { enabled: true, workflows: false, reverse: false, scenario: "BACKGROUND_CANCEL" },
@@ -45,11 +49,12 @@ for (const { enabled, workflows, reverse, scenario, compat } of [
   const agentDir = join(lane, "agent"); const cwd = join(lane, "workspace");
   await mkdir(agentDir, { recursive: true }); await mkdir(cwd, { recursive: true });
   const adapter = options["--extension"] ? resolve(options["--extension"]) : join(here, "../index.ts");
-  const paths = [join(here, "fixtures/rpc-provider.ts"), ...(scenario === "COLLISION" ? [join(here, "fixtures/collision.ts")] : []), ...(reverse ? [adapter, join(packageDir, "src/index.ts")] : [join(packageDir, "src/index.ts"), adapter])];
+  const paths = [join(here, "fixtures/rpc-provider.ts"), ...(scenario === "COLLISION" ? [join(here, "fixtures/collision.ts")] : scenario === "WORKFLOW_COLLISION" ? [join(here, "fixtures/workflow-collision.ts")] : []), ...(reverse ? [adapter, join(packageDir, "src/index.ts")] : [join(packageDir, "src/index.ts"), adapter])];
   await writeFile(join(agentDir, "settings.json"), JSON.stringify({ extensions: paths, skills: [], quietStartup: true }));
-  await writeFile(join(agentDir, "subagents.json"), JSON.stringify({ workflowsEnabled: workflows, reportUsage: true, outputTranscript: false, rememberAgents: false, agentMentions: "off" }));
+  await writeFile(join(agentDir, "subagents.json"), JSON.stringify({ ...(["WORKFLOW_COLLISION", "DEFAULT_WORKFLOW"].includes(scenario) ? {} : { workflowsEnabled: workflows }), reportUsage: true, outputTranscript: false, rememberAgents: false, agentMentions: "off" }));
   await mkdir(join(agentDir, "agents"), { recursive: true });
   await writeFile(join(agentDir, "agents/fixture-background.md"), "---\nname: fixture-background\ndescription: Deterministic fixture background child\nrun_in_background: true\n---\nReturn deterministic fixture output.\n");
+  await writeFile(join(agentDir, "agents/fixture-workflow.md"), "---\nname: fixture-workflow\ndescription: Deterministic isolated workflow child\nisolated: true\nextensions: false\n---\nReturn deterministic fixture output.\n");
   const env = { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1", PI_TELEMETRY: "0" };
   delete env.PI_TOOLING_SUBAGENTS_COMPAT;
   delete env.SUBAGENT_FIXTURE_DENY_NAME;
@@ -98,12 +103,35 @@ for (const { enabled, workflows, reverse, scenario, compat } of [
     if (!enabled) assert.equal(discovery.active.includes("subagent"), false);
     for (const name of enabled ? ["subagent_result", "subagent_steer"] : ["get_subagent_result", "steer_subagent"]) assert.equal(discovery.active.includes(name), true);
     assert.equal(discovery.active.includes(enabled ? "subagent_workflow" : "SubagentWorkflow"), workflows);
-    send({ type: "prompt", message: `SMOKE_PARENT${enabled ? "" : " ORIGINAL"}${workflows ? " WORKFLOW" : ""} ${scenario}`, id: "run" });
+    assert.equal(discovery.active.includes("workflow"), scenario === "WORKFLOW_COLLISION", "only the synthetic conflict exposes the retired name");
+    send({ type: "prompt", message: `SMOKE_PARENT${enabled ? "" : " ORIGINAL"}${workflows ? " WORKFLOW" : ""} ${scenario === "WORKFLOW_COLLISION" ? "" : scenario}`, id: "run" });
     if (scenario.includes("CANCEL")) {
       await waitFor((event) => event.type === "tool_execution_update" && event.partialResult?.details?.results?.[0]?.messages?.[0]?.content?.[0]?.text?.includes("Fixture child"));
       send({ type: "abort", id: "cancel" });
     }
     await waitFor((event) => event.type === "agent_end");
+    if (scenario === "WORKFLOW_FANOUT") {
+      const receipt = events.find((event) => event.type === "tool_execution_end" && event.toolName === "subagent_workflow");
+      assert.ok(receipt && !receipt.isError && receipt.result.details.taskId);
+      const taskId = receipt.result.details.taskId;
+      const notification = await waitFor((event) => event.type === "message_end" && event.message?.customType === "subagent-notification" && event.message.details?.id === taskId);
+      assert.equal(notification.message.details.status, "completed");
+      const final = /<result>([\s\S]*?)<\/result>/.exec(notification.message.content);
+      assert.ok(final, "upstream notification carries the real script result");
+      assert.deepEqual(JSON.parse(final[1]), { count: 4, allVerified: true });
+      await waitFor((event) => event.type === "agent_end" && events.indexOf(event) > events.indexOf(notification));
+      send({ type: "prompt", message: "/subagent-fixture-tools", id: "fanout-tools" });
+      await waitFor((event) => event.type === "response" && event.id === "fanout-tools");
+      send({ type: "get_messages", id: "fanout-messages" });
+      const after = await waitFor((event) => event.type === "response" && event.id === "fanout-messages");
+      const observed = after.data.messages.filter((message) => message.customType === "fixture_tools").at(-1).details;
+      assert.equal(observed.childStreams, 4, "upstream ran four real deterministic children");
+      assert.equal(observed.startedIds.length, 0, "workflow-owned children are not advertised as top-level agents");
+      assert.equal(observed.running, false);
+      assert.equal(events.filter((event) => event.type === "tool_execution_start" && event.toolName === "workflow").length, 0);
+      console.log(JSON.stringify({ lane: laneName, workflowEngine: "upstream", childStreams: 4, completed: true, backend: "deterministic fixture, no inference" }));
+      continue;
+    }
     const toolName = enabled ? "subagent" : "Agent";
     const updates = events.filter((event) => event.type === "tool_execution_update" && event.toolName === toolName);
     const end = events.find((event) => event.type === "tool_execution_end" && event.toolName === toolName);
@@ -136,12 +164,22 @@ for (const { enabled, workflows, reverse, scenario, compat } of [
       if (enabled) assert.equal(end.result.usage, undefined, "outer RPC outcome must not duplicate host-recorded nested usage");
       for (const event of events.filter((event) => event.type === "tool_execution_end" && aliasNames.includes(event.toolName))) assert.equal(event.result.usage, undefined, "later aliases must not charge the child's spend again");
     }
-    if (scenario.includes("BACKGROUND") && scenario !== "REJECT_BACKGROUND") assert.equal(events.some((event) => event.message?.customType === "subagent-notification"), false);
+    const joinedBackground = scenario.includes("BACKGROUND") && scenario !== "REJECT_BACKGROUND";
+    if (joinedBackground) {
+      // The upstream outbox holds idle completions for 200ms and can arm only
+      // after an interrupted run settles. Observe beyond that window rather
+      // than accepting an early event prefix as proof of consumption.
+      const parentStarts = events.filter((event) => event.type === "agent_start").length;
+      await delay(500);
+      assert.equal(events.some((event) => event.message?.customType === "subagent-notification"), false, "joined completion stays suppressed after the outbox hold");
+      assert.equal(events.filter((event) => event.type === "agent_start").length, parentStarts, "no notification-driven parent run after settlement");
+    }
     // Read back the exact manager's aggregate liveness, not a guessed child receipt.
     send({ type: "prompt", message: "/subagent-fixture-tools", id: "settled-tools" });
     await waitFor((event) => event.type === "response" && event.id === "settled-tools");
     send({ type: "get_messages", id: "settled-discovery" });
     const settledMessages = await waitFor((event) => event.type === "response" && event.id === "settled-discovery");
+    if (joinedBackground) assert.equal(settledMessages.data.messages.some((message) => message.customType === "subagent-notification"), false, "suppressed completion is absent from the read-back parent transcript");
     send({ type: "get_session_stats", id: "usage-stats" });
     const statsResponse = await waitFor((event) => event.type === "response" && event.id === "usage-stats");
     assert.equal(statsResponse.success, true);

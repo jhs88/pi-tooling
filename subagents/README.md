@@ -2,7 +2,7 @@
 
 This layer is enabled by default on supported hosts. Pi and T3 need no opt-in environment variable. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable it and restart Pi after changing the switch. An explicit `1` remains supported; other explicitly set values, including `true` and an empty string, disable it as before. Both alias-name and original-name permission hooks run through Pi's supported tool pipeline. Existing original-name rules still apply; an alias does not bypass an original deny rule.
 
-Supported third-party package: `@tintinweb/pi-subagents@0.19.0`. The Pi baseline is 1.1.0. The repository owner has confirmed subagent tool visibility in T3's UI. The adapters require public `ToolDefinition.prepareLoadout` with registered/callable tool inventories and `ExtensionToolContext.executeTool`. Pi 0.83.0 has only tool metadata in `getAllTools()` and cannot enable these adapters. On an unsupported host, an absent dependency, an unsupported dependency version, or an unavailable original executor, the original tools remain available and the affected aliases are inactive.
+Supported third-party package: `@tintinweb/pi-subagents@0.22.0`. The minimum Pi version is 1.1.0; SDK and RPC checks use Pi 1.3.0. The repository owner confirmed T3 tool visibility on the earlier baseline; the upgraded version has model-free RPC coverage, not a new T3 UI verification. The adapters require public `ToolDefinition.prepareLoadout` with registered/callable tool inventories and `ExtensionToolContext.executeTool`. Pi 0.83.0 has only tool metadata in `getAllTools()` and cannot enable these adapters. On an unsupported host, an absent dependency, an unsupported dependency version, or an unavailable original executor, the original tools remain available and the affected aliases are inactive.
 
 | Original tool | Enabled tool | Behavior |
 | --- | --- | --- |
@@ -11,7 +11,7 @@ Supported third-party package: `@tintinweb/pi-subagents@0.19.0`. The Pi baseline
 | `steer_subagent` | `subagent_steer` | Original steering behavior |
 | `SubagentWorkflow` | `subagent_workflow` | Original background workflow behavior, if enabled upstream |
 
-`subagent_workflow` is optional. Version 0.19.0 includes `SubagentWorkflow`, but `workflowsEnabled: false` in the dependency's `subagents.json` disables it. The adapter does not enable an upstream-disabled workflow or synthesize a substitute. This package's separate `workflow` tool retains its explicit invocation, three-child limit and nonrecursive child policy. The child SDK policy excludes the aliases too.
+`subagent_workflow` forwards to the upstream workflow engine. There is no separate Pi Tooling `workflow` tool or `/workflows` command. Upstream enables workflows by default; `workflowsEnabled: false` disables them. A competing extension's `workflow`, `Workflow`, or `SubagentWorkflow` can cause upstream to stand down unless explicitly enabled. The adapter respects that decision. Use `/agents` → Workflows for inspection and the bundled workflow skill for invocation guidance. Upstream owns scheduling and limits, without a Pi Tooling three-child cap. Standalone A2A child policy still excludes orchestration tools.
 
 ## Execution contract
 
@@ -44,6 +44,14 @@ Final-result redaction is not streaming redaction. Pi emits original activity up
 
 The dependency's cross-extension RPC is an in-process `pi.events` bus, not Pi's stdin/stdout RPC protocol. Its spawn API strips internal fields, overwrites activity callbacks, and cannot express the complete original tool contract. The adapters therefore use Pi's supported `ctx.executeTool` API, not the bus spawn API or raw executors. The bus is used only for targeted stop and consumption; the pinned manager registry supplies targeted records. A broken consume listener can prevent notification suppression, but cannot skip targeted abort or subscription cleanup.
 
+## Upstream 0.22 behavior
+
+The foreground contract is unchanged. Joined background children still use the targeted consume channel, now canceling queued completion notifications before delivery. Real RPC tests verify that joins and cancellation do not produce a second completion notification, and that usage is counted once.
+
+For detached upstream calls, `smart` no longer waits for siblings. A busy parent receives completions at its next tool-batch boundary; an idle parent receives them after a short hold. `group` batches by parent turn. Pending completions survive an interrupted parent turn. Ctrl+B can turn an upstream foreground call into background execution; the wrapper joins its returned child instead of treating the receipt as a finished child.
+
+Installed packages may now contribute agents and workflow scripts by default. Set `packageAgents: false` and `packageWorkflows: false` in `subagents.json` to retain a locally curated roster. These settings do not disable the ordinary agents defined in global or project directories.
+
 ## Roll back
 
-Set `PI_TOOLING_SUBAGENTS_COMPAT=0` and restart the Pi process and T3 backend. In PowerShell, use `$env:PI_TOOLING_SUBAGENTS_COMPAT = "0"`. Unsetting the variable enables the adapter again on supported hosts. This naming adapter does not modify the separate subagents package; removing its native MCP patch is covered in [the patch guide](../compat/README.md#reinstall-update-and-removal).
+Set `PI_TOOLING_SUBAGENTS_COMPAT=0` and restart the Pi process and T3 backend. In PowerShell, use `$env:PI_TOOLING_SUBAGENTS_COMPAT = "0"`. Unsetting the variable enables the adapter again on supported hosts. This naming adapter does not modify the separate subagents package. Native MCP comes from upstream; the old patch command has been removed.

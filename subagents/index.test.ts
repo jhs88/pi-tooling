@@ -25,7 +25,7 @@ type HostOptions = {
 };
 
 /** Faithful public nested dispatch fixture, including outcome errors and IDs. */
-function host({ modern = true, callable = true, workflow = true, version = "0.19.0", originalsFirst = true, collision = "", deny = "", compat }: HostOptions = {}) {
+function host({ modern = true, callable = true, workflow = true, version = "0.22.0", originalsFirst = true, collision = "", deny = "", compat }: HostOptions = {}) {
   const directory = mkdtempSync(join(tmpdir(), "subagent-tools-"));
   mkdirSync(join(directory, "src"));
   writeFileSync(join(directory, "package.json"), JSON.stringify({ name: "@tintinweb/pi-subagents", version }));
@@ -226,7 +226,7 @@ test("unavailable original executor leaves its declaration visible, other aliase
   } finally { h.close(); }
 });
 
-for (const version of ["0.20.0", "0.19.0"]) test(`unreviewed or lost metadata never hides originals, initial ${version}`, () => {
+for (const version of ["0.19.0", "0.20.0", "0.21.0", "0.22.0", "0.23.0"]) test(`unreviewed or lost metadata never hides originals, initial ${version}`, () => {
   const h = host({ version });
   try {
     h.handlers.get("session_start")!();

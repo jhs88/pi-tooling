@@ -5,7 +5,6 @@ import registerBackgroundTerminals from "./background-terminals/index.ts";
 import registerFileSearch from "./file-search/index.ts";
 import registerFirecrawl from "./firecrawl/index.ts";
 import registerSubagentCompatibility from "./subagents/index.ts";
-import registerWorkflows from "./workflows/index.ts";
 
 /** Compose the selectively adapted Pi tooling extensions as one package. */
 export default function registerPiTooling(pi: ExtensionAPI): void {
@@ -14,6 +13,5 @@ export default function registerPiTooling(pi: ExtensionAPI): void {
   registerFirecrawl(pi);
   registerAskUser(pi);
   registerBackgroundTerminals(pi);
-  registerWorkflows(pi);
   registerSubagentCompatibility(pi);
 }

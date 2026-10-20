@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for `@tintinweb/pi-subagents` 0.19.0 with Pi 0.99.1.
+Superseded by [0002: use upstream subagent workflows and native MCP](0002-upstream-subagent-workflows.md). The patch command and specification have been removed. The original decision below is historical, for subagents 0.19.0.
 
 ## Context
 
