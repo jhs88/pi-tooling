@@ -4,9 +4,9 @@ This adapter is new code. It forwards to registered originals through the public
 
 ## Current baseline
 
-Development dependencies now pin the Pi host packages to 1.1.0, which supports native llama.cpp decision models. The naming adapter is enabled when `PI_TOOLING_SUBAGENTS_COMPAT` is unset; an explicit `1` remains supported, and other explicitly set values disable it. Source-version, activation, collision, execution-context and permission checks are unchanged. The repository owner has tested T3 and confirmed that the subagent tools appear in its UI.
+Development dependencies now pin the Pi host packages to 1.3.0, which supports native llama.cpp decision models. The naming adapter is enabled when `PI_TOOLING_SUBAGENTS_COMPAT` is unset; an explicit `1` remains supported, and other explicitly set values disable it. Source-version, activation, collision, execution-context and permission checks are unchanged. The repository owner has tested T3 and confirmed that the subagent tools appear in its UI.
 
-The older Pi versions and line references below record the original review, not the current dependency pins. The separately reviewed subagents release remains 0.19.0. Its native MCP patch still requires explicit application.
+The older Pi versions and line references below record the original review, not the current dependency pins. The current reviewed release is 0.22.0, with upstream native MCP and no source patch. The 0.19.0 evidence below is historical. Current checks cover real SDK execution, permission/redaction hooks, once-only usage, cancellation, reload, notification suppression, both load orders, and default workflow collision withdrawal. The native MCP fixture runs against unmodified 0.22.0. The legacy patch and its fixture dependency have been removed. Workflows use upstream directly through the existing alias; RPC checks exercise default availability and a real four-child workflow without inference. T3 UI rendering has not been reverified for this upgrade.
 
 ## Exact dependency reviewed
 

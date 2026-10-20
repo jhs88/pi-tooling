@@ -61,7 +61,7 @@ export function isPinnedSubagentsSource(path: string): boolean {
   for (;;) {
     try {
       const pkg: unknown = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
-      return pkg !== null && typeof pkg === "object" && "name" in pkg && "version" in pkg && pkg.name === "@tintinweb/pi-subagents" && pkg.version === "0.19.0";
+      return pkg !== null && typeof pkg === "object" && "name" in pkg && "version" in pkg && pkg.name === "@tintinweb/pi-subagents" && pkg.version === "0.22.0";
     } catch { /* walk to the package root */ }
     const parent = dirname(directory);
     if (parent === directory) return false;

@@ -1,6 +1,6 @@
 # Pi Tooling
 
-A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md) that adds file search, self-hosted web research, focused user interaction, background processes, and bounded workflow orchestration.
+A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md) that adds file search, self-hosted web research, focused user interaction, background processes, and T3-compatible subagent tools.
 
 ## Tools
 
@@ -10,11 +10,11 @@ A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/co
 | Web research | `search`, `scrape`, `crawl` | Requires an explicitly configured self-hosted Firecrawl endpoint |
 | User interaction | `ask_user` | Presents one focused question with selectable and custom-answer paths |
 | Background processes | `bg_start`, `bg_status`, `bg_list`, `bg_kill` | Runs non-interactive, session-scoped processes with bounded output |
-| Workflows | `workflow`, `/workflows` | Runs explicitly requested JavaScript workflows with bounded fan-out |
+| Workflows | `subagent_workflow` | Forwards to the separately installed subagents plugin |
 
 The package supplements rather than replaces [`@tintinweb/pi-subagents`](https://www.npmjs.com/package/@tintinweb/pi-subagents).
 
-The [subagent compatibility layer](subagents/README.md) exposes `subagent`, `subagent_result`, `subagent_steer`, and an upstream-enabled `subagent_workflow` by default on supported hosts. No environment switch is needed, including when T3 launches Pi. It requires the pinned subagents 0.19.0 package and Pi's public loadout and `ctx.executeTool` APIs. It preserves permissions and supplies foreground progress fields for T3 without editing either dependency. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable it. The repository owner has confirmed subagent tool visibility in T3's UI.
+The [subagent compatibility layer](subagents/README.md) exposes `subagent`, `subagent_result`, `subagent_steer`, and an upstream-enabled `subagent_workflow` by default on supported hosts. No environment switch is needed, including when T3 launches Pi. It requires the pinned subagents 0.22.0 package and Pi's public loadout and `ctx.executeTool` APIs. It preserves permissions and supplies foreground progress fields for T3 without editing either dependency. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable it. T3 tool visibility was owner-confirmed on the earlier baseline; this upgrade has SDK/RPC coverage, not a new UI verification.
 
 It also bundles `background-terminals` and `workflows` skills so Pi receives operational guidance alongside the specialized tools they describe.
 
@@ -24,7 +24,7 @@ It also bundles `background-terminals` and `workflows` skills so Pi receives ope
 - Node.js and npm available to Pi's package manager
 - A self-hosted Firecrawl endpoint if the web-research tools will be used
 
-Development dependencies pin the Pi host packages to 1.1.0. This baseline supports native llama.cpp decision models. Their router must be llama.cpp 0.6.0 or newer and advertise `decisions` in `architecture.output_modalities`. Pi host packages remain wildcard peers, as required for managed packages.
+Development dependencies pin the Pi host packages to 1.3.0. This baseline supports native llama.cpp decision models. Their router must be llama.cpp 0.6.0 or newer and advertise `decisions` in `architecture.output_modalities`. Pi host packages remain wildcard peers, as required for managed packages.
 
 ## Install
 
@@ -52,17 +52,9 @@ See [`docs/package-lifecycle.md`](docs/package-lifecycle.md) for dependency reco
 
 ## Subagent native MCP compatibility
 
-Pi's CLI loads native MCP, but `@tintinweb/pi-subagents` 0.19.0 does not initialize it in SDK child sessions. This package provides an explicitly invoked compatibility patch, not a fork or an automatic install hook:
+Use `@tintinweb/pi-subagents@0.22.0` with Pi 1.1.0 or newer. Native MCP, codemode, tool search, project trust, and nested tool scoping are supplied by upstream. No source patch is needed. The development and RPC verification baseline is Pi 1.3.0.
 
-```bash
-# From this development checkout:
-npm run compat:subagents -- --check
-npm run compat:subagents
-```
-
-The packaged command is `pi-subagents-compat` when this package's npm bin directory is on PATH. Pin the separate Pi package to `npm:@tintinweb/pi-subagents@0.19.0`. Reapply the patch after a reinstall or package reconciliation, then run `/reload`.
-
-The command checks the Pi version and reviewed package/source hashes before writing, backs up changed files, and is safe to repeat. Unknown releases or source changes fail closed. See [`compat/README.md`](compat/README.md) for tool selectors, isolated-session behavior, and updating or removing the patch.
+Children with extensions enabled can start their own MCP servers. Use `extensions: false`, `isolated: true`, or `exclude_extensions: builtin:mcp` when they should not. Restricted MCP access uses explicit `ext:builtin:mcp/<tool>` selectors. The obsolete native MCP patch and command have been removed. Use explicit extension selectors for restricted agents; bare MCP tool names are not an authorization boundary.
 
 ## Configure Firecrawl
 
@@ -83,7 +75,7 @@ Only explicit HTTP(S) endpoints are accepted. The public Firecrawl Cloud endpoin
 
 ## Safety defaults
 
-- Workflow execution is explicit, limited to three children, and cannot recursively invoke orchestration tools.
+- Workflow execution uses the upstream subagents plugin, including its scheduling, limits, progress UI, and same-session replay. Pi Tooling does not impose a separate three-child cap.
 - Background processes are non-interactive, session-owned, output-bounded, redacted, and terminated as process trees.
 - Firecrawl output is bounded, persisted when oversized, and cancellable.
 - Downloaded `fd` and `rg` fallbacks use pinned checksums from official release assets.

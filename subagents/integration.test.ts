@@ -17,7 +17,7 @@ for (const alias of Object.values(TOOL_ALIASES)) test(`real SDK first-wins ${ali
     const agentDir = join(root, "agent");
     const pinnedRoot = join(root, "pinned");
     await mkdir(pinnedRoot);
-    await writeFile(join(pinnedRoot, "package.json"), JSON.stringify({ name: "@tintinweb/pi-subagents", version: "0.19.0" }));
+    await writeFile(join(pinnedRoot, "package.json"), JSON.stringify({ name: "@tintinweb/pi-subagents", version: "0.22.0" }));
     const originalPath = join(pinnedRoot, "index.ts");
     await writeFile(originalPath, `export default function(pi) { for (const name of ${JSON.stringify(Object.keys(TOOL_ALIASES))}) pi.registerTool({ name, label: name, description: name, parameters: { type: "object", properties: {} }, async execute() { return { content: [], details: {} }; } }); }`);
     const collisionSchema = Type.Object({ unrelated: Type.String() });
@@ -54,7 +54,7 @@ for (const { deny, redact, scenario } of [
   { deny: "", redact: "get_subagent_result", scenario: "REDACT_RESULT_BACKGROUND" },
   { deny: "", redact: "Agent", scenario: "REDACT_ORIGINAL_ERROR" },
   { deny: "", redact: "get_subagent_result", scenario: "REDACT_RESULT_BACKGROUND_ERROR" },
-]) test(`real Pi 1.1.0 SDK + default-on pinned extension respects ${deny || scenario || "normal execution"}`, async () => {
+]) test(`real Pi 1.3.0 SDK + default-on pinned extension respects ${deny || scenario || "normal execution"}`, async () => {
   const root = await mkdtemp(join(tmpdir(), "subagent-sdk-permission-"));
   const saved = new Map(["PI_TOOLING_SUBAGENTS_COMPAT", "PI_CODING_AGENT_DIR", "SUBAGENT_FIXTURE_DENY_NAME", "SUBAGENT_FIXTURE_REDACT_NAME"].map((key) => [key, process.env[key]]));
   let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;

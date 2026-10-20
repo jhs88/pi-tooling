@@ -34,9 +34,13 @@ export default function fixtureProvider(pi: ExtensionAPI): void {
     streamSimple(model, context, options) {
       const stream = createAssistantMessageEventStream();
       void (async () => {
-        const user = [...context.messages].reverse().find((message) => message.role === "user");
-        const prompt = typeof user?.content === "string" ? user.content : user?.content?.map((item) => item.type === "text" ? item.text : "").join("") ?? "";
-        const isParent = prompt.includes("SMOKE_PARENT");
+        const textOf = (message: (typeof context.messages)[number] | undefined) => typeof message?.content === "string" ? message.content : message?.content?.map((item) => item.type === "text" ? item.text : "").join("") ?? "";
+        const latestUser = [...context.messages].reverse().find((message) => message.role === "user");
+        // Completion notifications become user messages in provider context.
+        // They continue the parent, never create another fixture child stream.
+        const isParent = !textOf(latestUser).startsWith("SMOKE_CHILD");
+        const user = isParent ? [...context.messages].reverse().find((message) => message.role === "user" && textOf(message).includes("SMOKE_PARENT")) : latestUser;
+        const prompt = textOf(user);
         if (isParent) {
           const declared = new Set<string>();
           for (const entry of context.messages) if (entry.role === "system") {
@@ -47,11 +51,12 @@ export default function fixtureProvider(pi: ExtensionAPI): void {
         } else childStreams++;
         const completed = context.messages.slice(context.messages.indexOf(user!) + 1).filter((message) => message.role === "toolResult");
         const names = prompt?.split(/\s+/).includes("ORIGINAL") ? ["Agent", "get_subagent_result", "steer_subagent", "SubagentWorkflow"] : ["subagent", "subagent_result", "subagent_steer", "subagent_workflow"];
-        const callCount = prompt?.includes("NO_CALLS") ? 0 : prompt?.includes("REJECT_BACKGROUND") || prompt?.includes("ERROR") || prompt?.includes("PERMISSION_") || prompt?.includes("REDACT_") ? 1 : prompt?.includes("WORKFLOW") ? 4 : 3;
+        const fanoutWorkflow = prompt.includes("WORKFLOW_FANOUT");
+        const callCount = prompt?.includes("NO_CALLS") ? 0 : fanoutWorkflow ? 1 : prompt?.includes("REJECT_BACKGROUND") || prompt?.includes("ERROR") || prompt?.includes("PERMISSION_") || prompt?.includes("REDACT_") ? 1 : prompt?.includes("WORKFLOW") ? 4 : 3;
         const message: AssistantMessage = { role: "assistant", api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(), content: [], stopReason: "stop", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
         stream.push({ type: "start", partial: message });
         if (isParent && completed.length < callCount) {
-          const name = names[completed.length];
+          const name = fanoutWorkflow ? "subagent_workflow" : names[completed.length];
           const firstDetails: unknown = completed[0]?.details;
           // Joined get_subagent_result returns its identity in processed text,
           // not details. Use only parent-visible output, never fixture registry.
@@ -63,7 +68,7 @@ export default function fixtureProvider(pi: ExtensionAPI): void {
             { agent_id: childId, message: "Fixture steer after completion should be refused" },
             { script: 'export const meta = { name: "fixture-workflow", description: "Deterministic no-child workflow" }; return { fixture: true };', args: { fixture: true } },
           ];
-          const call: ToolCall = { type: "toolCall", id: completed.length === 0 ? "fixture-child-call" : `fixture-alias-${completed.length}`, name, arguments: argumentsByStep[completed.length] };
+          const call: ToolCall = { type: "toolCall", id: completed.length === 0 ? "fixture-child-call" : `fixture-alias-${completed.length}`, name, arguments: fanoutWorkflow ? { script: `export const meta = { name: "fixture-fanout", description: "Four real upstream workflow children" }; const outputs = await parallel([0,1,2,3].map(i => () => agent("SMOKE_CHILD", { agentType: "fixture-workflow", label: "child-" + i }))); return { count: outputs.length, allVerified: outputs.every(text => typeof text === "string" && text.includes("verified deterministic output")) };` } : argumentsByStep[completed.length] };
           message.content.push(call); message.stopReason = "toolUse";
           stream.push({ type: "toolcall_start", contentIndex: 0, partial: message });
           stream.push({ type: "toolcall_end", contentIndex: 0, toolCall: call, partial: message });
