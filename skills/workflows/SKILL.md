@@ -5,6 +5,8 @@ description: Run explicitly requested multi-agent workflows with the installed s
 
 # Workflows
 
+When T3's native delegation tools are available and this layer selects them, use `mcp__t3-code__delegate_task` and T3's task/thread controls so children have openable conversations. Discover supported targets first and follow returned `next` instructions. Do not invoke the private Pi tools or translate a Pi workflow script or restricted agent definition into prompt text. A request requiring those Pi-specific settings must run in standalone Pi. The instructions below apply to standalone Pi.
+
 Use `subagent_workflow`, the Pi Tooling alias for the separate subagents plugin's `SubagentWorkflow`. If compatibility is disabled, use its advertised original name. Do not use the retired `workflow` tool or `/workflows` command.
 
 Use ordinary `subagent` for one delegation or a few independent tasks. Use a workflow when explicitly requested and useful for stages, runtime-discovered fan-out, structured results, or reusable scripts. Include self-contained child prompts and use the fewest agents needed. The plugin owns scheduling and resource limits; there is no Pi Tooling three-child cap.

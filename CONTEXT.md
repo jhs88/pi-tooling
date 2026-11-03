@@ -40,4 +40,5 @@ _Avoid_: nested orchestrator
 - Standalone A2A children retain their independent tool policy; workflow ownership does not remove those restrictions.
 - Background terminals are non-interactive, session-owned, output-bounded, redacted, and process-tree terminated.
 - `@tintinweb/pi-subagents` remains a separate managed Pi package; this package supplements rather than replaces it.
+- Verified T3 sessions use T3-owned delegation and task/thread controls so children are openable. Private Pi orchestration is hidden and blocked there; agent definitions and workflow scripts are not translated. Standalone Pi retains the upstream engine. See ADR 0003.
 - Hermes Kanban board `pi-tooling` owns active planning and task state. `docs/history/` is evidence, not an active tracker.

@@ -54,7 +54,7 @@ for (const { deny, redact, scenario } of [
   { deny: "", redact: "get_subagent_result", scenario: "REDACT_RESULT_BACKGROUND" },
   { deny: "", redact: "Agent", scenario: "REDACT_ORIGINAL_ERROR" },
   { deny: "", redact: "get_subagent_result", scenario: "REDACT_RESULT_BACKGROUND_ERROR" },
-]) test(`real Pi 1.3.0 SDK + default-on pinned extension respects ${deny || scenario || "normal execution"}`, async () => {
+]) test(`real Pi SDK + default-on reviewed extension respects ${deny || scenario || "normal execution"}`, async () => {
   const root = await mkdtemp(join(tmpdir(), "subagent-sdk-permission-"));
   const saved = new Map(["PI_TOOLING_SUBAGENTS_COMPAT", "PI_CODING_AGENT_DIR", "SUBAGENT_FIXTURE_DENY_NAME", "SUBAGENT_FIXTURE_REDACT_NAME"].map((key) => [key, process.env[key]]));
   let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;

@@ -52,11 +52,12 @@ export default function fixtureProvider(pi: ExtensionAPI): void {
         const completed = context.messages.slice(context.messages.indexOf(user!) + 1).filter((message) => message.role === "toolResult");
         const names = prompt?.split(/\s+/).includes("ORIGINAL") ? ["Agent", "get_subagent_result", "steer_subagent", "SubagentWorkflow"] : ["subagent", "subagent_result", "subagent_steer", "subagent_workflow"];
         const fanoutWorkflow = prompt.includes("WORKFLOW_FANOUT");
-        const callCount = prompt?.includes("NO_CALLS") ? 0 : fanoutWorkflow ? 1 : prompt?.includes("REJECT_BACKGROUND") || prompt?.includes("ERROR") || prompt?.includes("PERMISSION_") || prompt?.includes("REDACT_") ? 1 : prompt?.includes("WORKFLOW") ? 4 : 3;
+        const t3Native = prompt.includes("T3_NATIVE");
+        const callCount = prompt?.includes("NO_CALLS") ? 0 : fanoutWorkflow || t3Native ? 1 : prompt?.includes("REJECT_BACKGROUND") || prompt?.includes("ERROR") || prompt?.includes("PERMISSION_") || prompt?.includes("REDACT_") ? 1 : prompt?.includes("WORKFLOW") ? 4 : 3;
         const message: AssistantMessage = { role: "assistant", api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(), content: [], stopReason: "stop", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
         stream.push({ type: "start", partial: message });
         if (isParent && completed.length < callCount) {
-          const name = fanoutWorkflow ? "subagent_workflow" : names[completed.length];
+          const name = t3Native ? parentDeclarations.includes("subagent") ? "subagent" : "mcp__t3-code__delegate_task" : fanoutWorkflow ? "subagent_workflow" : names[completed.length];
           const firstDetails: unknown = completed[0]?.details;
           // Joined get_subagent_result returns its identity in processed text,
           // not details. Use only parent-visible output, never fixture registry.
@@ -68,7 +69,7 @@ export default function fixtureProvider(pi: ExtensionAPI): void {
             { agent_id: childId, message: "Fixture steer after completion should be refused" },
             { script: 'export const meta = { name: "fixture-workflow", description: "Deterministic no-child workflow" }; return { fixture: true };', args: { fixture: true } },
           ];
-          const call: ToolCall = { type: "toolCall", id: completed.length === 0 ? "fixture-child-call" : `fixture-alias-${completed.length}`, name, arguments: fanoutWorkflow ? { script: `export const meta = { name: "fixture-fanout", description: "Four real upstream workflow children" }; const outputs = await parallel([0,1,2,3].map(i => () => agent("SMOKE_CHILD", { agentType: "fixture-workflow", label: "child-" + i }))); return { count: outputs.length, allVerified: outputs.every(text => typeof text === "string" && text.includes("verified deterministic output")) };` } : argumentsByStep[completed.length] };
+          const call: ToolCall = { type: "toolCall", id: completed.length === 0 ? "fixture-child-call" : `fixture-alias-${completed.length}`, name, arguments: t3Native && name === "mcp__t3-code__delegate_task" ? { task: "SMOKE_CHILD T3_NATIVE", title: "Clickable Pi child", mode: "wait", timeoutMs: 60000 } : fanoutWorkflow ? { script: `export const meta = { name: "fixture-fanout", description: "Four real upstream workflow children" }; const outputs = await parallel([0,1,2,3].map(i => () => agent("SMOKE_CHILD", { agentType: "fixture-workflow", label: "child-" + i }))); return { count: outputs.length, allVerified: outputs.every(text => typeof text === "string" && text.includes("verified deterministic output")) };` } : argumentsByStep[completed.length] };
           message.content.push(call); message.stopReason = "toolUse";
           stream.push({ type: "toolcall_start", contentIndex: 0, partial: message });
           stream.push({ type: "toolcall_end", contentIndex: 0, toolCall: call, partial: message });
@@ -77,7 +78,7 @@ export default function fixtureProvider(pi: ExtensionAPI): void {
           message.content.push(text);
           stream.push({ type: "text_start", contentIndex: 0, partial: message });
           for (const delta of isParent ? ["Parent received fixture child result."] : ["Fixture child is inspecting auth.ts. ", `Fixture child verified deterministic output.${prompt.includes("REDACTION_TEST") ? " SECRET child output" : ""}`]) {
-            await delay(120);
+            await delay(!isParent && t3Native ? 4000 : 120);
             if (options?.signal?.aborted) { message.stopReason = "aborted"; break; }
             text.text += delta;
             stream.push({ type: "text_delta", contentIndex: 0, delta, partial: message });

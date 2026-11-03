@@ -1,7 +1,6 @@
 // Adapted from davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e;
 // scrape bounds refreshed from @73bf4d826f39b5cab6b7865e706ba4a2669629ca;
 // self-hosted-only locally.
-import { StringEnum } from "@earendil-works/pi-ai";
 import {
   type AgentToolResult,
   type AgentToolUpdateCallback,
@@ -185,7 +184,7 @@ export default function firecrawlTools(pi: ExtensionAPI) {
           maximum: 20,
         }),
       ),
-      source: Type.Optional(StringEnum(["web", "news", "images"] as const)),
+      source: Type.Optional(Type.Union([Type.Literal("web"), Type.Literal("news"), Type.Literal("images")])),
       scrapeResults: Type.Optional(
         Type.Boolean({
           description: SEARCH_PARAMETER_DESCRIPTIONS.scrapeResults,
@@ -254,7 +253,7 @@ export default function firecrawlTools(pi: ExtensionAPI) {
           description: CRAWL_PARAMETER_DESCRIPTIONS.allowSubdomains,
         }),
       ),
-      sitemap: Type.Optional(StringEnum(["include", "skip", "only"] as const)),
+      sitemap: Type.Optional(Type.Union([Type.Literal("include"), Type.Literal("skip"), Type.Literal("only")])),
       onlyMainContent: Type.Optional(
         Type.Boolean({
           description: CRAWL_PARAMETER_DESCRIPTIONS.onlyMainContent,

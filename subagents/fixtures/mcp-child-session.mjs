@@ -140,7 +140,7 @@ async function main() {
     } else if (plain) {
       assert.ok(activities.some(({ toolName }) => toolName.includes('not a known built-in') && toolName.includes(ping)), 'plain MCP name must be diagnosed as an invalid builtin');
       const manifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8'));
-      assert.equal(manifest.version, '0.22.0', 'fixture must use the reviewed upstream release');
+      assert.ok(['0.22.0', '0.23.0'].includes(manifest.version), 'fixture must use a reviewed upstream release');
       // Upstream 0.22 diagnoses invalid plain MCP names but retains them in
       // toolNames. This is not an enforcement boundary. Our agent definitions
       // use ext: selectors; retain this test to expose the upstream difference.
