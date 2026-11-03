@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { ExtensionAPI, ExtensionToolContext, ToolDefinition, ToolLoadout } from "@earendil-works/pi-coding-agent";
 import { Type, type TSchema } from "typebox";
 import { executeVisibleSubagent, readResult, readArgs, type ExecutableTool, type ToolResult } from "./visible.ts";
+import { hasT3DelegationBridge, T3_DELEGATION_GUIDANCE } from "./t3.ts";
 
 export const TOOL_ALIASES = {
   Agent: "subagent",
@@ -55,13 +56,13 @@ const descriptions: Record<string, string> = {
   SubagentWorkflow: "Start a subagent workflow script in the background. Accepts inline source, a script path, a saved name, arguments and a previous run ID.",
 };
 
-/** Only metadata from the exact separate npm package is an eligible target. */
+/** Only reviewed releases of the separate npm package are eligible targets. */
 export function isPinnedSubagentsSource(path: string): boolean {
   let directory = dirname(path);
   for (;;) {
     try {
       const pkg: unknown = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
-      return pkg !== null && typeof pkg === "object" && "name" in pkg && "version" in pkg && pkg.name === "@tintinweb/pi-subagents" && pkg.version === "0.22.0";
+      return pkg !== null && typeof pkg === "object" && "name" in pkg && "version" in pkg && pkg.name === "@tintinweb/pi-subagents" && (pkg.version === "0.22.0" || pkg.version === "0.23.0");
     } catch { /* walk to the package root */ }
     const parent = dirname(directory);
     if (parent === directory) return false;
@@ -75,11 +76,14 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
 
   const candidates = new Map<string, RegisteredTool>();
   const approved = new Set<string>();
+  const nativeSuppressed = new Set<string>();
   const aliasSchemas = new Map<string, TSchema>();
   let usageReader: RegisteredTool | undefined;
   let loadoutSupported = false;
   let executionUnsupported = false;
   let shutDown = false;
+  const t3ExtensionPath = process.env.T3_PI_MCP_EXTENSION_PATH;
+  let t3Delegation = false;
   const calls = new Set<AbortController>();
 
   function refreshRegisteredOriginals(loadout: ToolLoadout): void {
@@ -87,6 +91,7 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
     // not only callable tools or the original paired with this active hook.
     // Reconciliation below independently checks current activation and ownership.
     loadoutSupported = Array.isArray(loadout.callable);
+    t3Delegation = loadoutSupported && hasT3DelegationBridge(pi.getAllTools(), loadout.callable, t3ExtensionPath);
     candidates.clear();
     for (const original of Object.keys(TOOL_ALIASES)) {
       const tool = loadout.registered.find((entry) => entry.name === original);
@@ -126,12 +131,15 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
           Object.assign(parameters, schema);
         }
         return {
-          hiddenDeclarations: loadoutSupported && !executionUnsupported && approved.has(original) && candidates.has(original)
-            && loadout.callable.some((entry) => entry.name === original) ? [original] : [],
+          hiddenDeclarations: t3Delegation
+            ? [...nativeSuppressed].filter((name) => loadout.callable.some((entry) => entry.name === name)).concat(alias)
+            : loadoutSupported && !executionUnsupported && approved.has(original) && candidates.has(original)
+              && loadout.callable.some((entry) => entry.name === original) ? [original] : [],
           descriptions: { [alias]: descriptions[original] },
         };
       },
       async execute(id, rawArgs, signal, onUpdate, ctx) {
+        if (t3Delegation && nativeSuppressed.has(original)) throw new Error(T3_DELEGATION_GUIDANCE);
         const args = readArgs(rawArgs);
         const candidate = candidates.get(original);
         if (typeof ctx?.executeTool !== "function") {
@@ -175,12 +183,23 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
     const active = new Set(pi.getActiveTools());
     const reader = usageReader;
     approved.clear();
+    nativeSuppressed.clear();
     for (const [original, alias] of Object.entries(TOOL_ALIASES)) {
-      if (all.find((tool) => tool.name === alias)?.parameters !== aliasSchemas.get(alias)) continue;
       const current = all.find((tool) => tool.name === original);
       const source = current?.sourceInfo.path;
+      const reviewedOriginal = loadoutSupported && candidates.has(original)
+        && current?.parameters === candidates.get(original)?.parameters && source && isPinnedSubagentsSource(source);
+      // Suppressing a private backend is independent of whether its result reader
+      // is active or whether its corresponding public alias belongs to us.
+      if (t3Delegation && reviewedOriginal) nativeSuppressed.add(original);
+      if (all.find((tool) => tool.name === alias)?.parameters !== aliasSchemas.get(alias)) continue;
+      if (t3Delegation) {
+        // Keep our declaration hooks active, but never expose or execute aliases.
+        active.add(alias);
+        continue;
+      }
       // Respect upstream collision resolution and user-disabled originals.
-      if (loadoutSupported && !executionUnsupported && candidates.has(original) && current?.parameters === candidates.get(original)?.parameters && source && isPinnedSubagentsSource(source)
+      if (!executionUnsupported && reviewedOriginal
         && (original !== "Agent" || reader && active.has(reader.name)
           && all.find((tool) => tool.name === reader.name)?.parameters === reader.parameters
           && isPinnedSubagentsSource(all.find((tool) => tool.name === reader.name)?.sourceInfo.path ?? ""))
@@ -195,10 +214,23 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
   }
 
   pi.on("session_start", () => { shutDown = false; reconcile(); });
-  pi.on("before_agent_start", () => { reconcile(); });
+  pi.on("before_agent_start", (event) => {
+    reconcile();
+    if (t3Delegation) return { systemPrompt: `${event.systemPrompt}\n\n${T3_DELEGATION_GUIDANCE}` };
+  });
+  pi.on("tool_call", (event) => {
+    if (!t3Delegation) return;
+    const original = Object.entries(TOOL_ALIASES).find(([name, alias]) => event.toolName === name || event.toolName === alias)?.[0];
+    if (!original || !nativeSuppressed.has(original)) return;
+    const alias = TOOL_ALIASES[original as keyof typeof TOOL_ALIASES];
+    // Do not intercept an unrelated first-wins alias owned by another extension.
+    if (event.toolName === alias && pi.getAllTools().find((tool) => tool.name === alias)?.parameters !== aliasSchemas.get(alias)) return;
+    return { block: true, reason: T3_DELEGATION_GUIDANCE };
+  });
   pi.on("session_shutdown", () => {
     shutDown = true;
     approved.clear();
+    nativeSuppressed.clear();
     candidates.clear();
     for (const controller of calls) controller.abort(new Error("Session shut down"));
   });

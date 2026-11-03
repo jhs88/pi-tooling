@@ -1,0 +1,28 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PI_OFFLINE: "1"
+      PI_TELEMETRY: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run verify
+      - name: Exercise real Pi RPC without inference
+        run: node subagents/rpc-smoke.mjs --pi="$PWD/node_modules/.bin/pi" --package-dir="$PWD/node_modules/@tintinweb/pi-subagents"
+      - run: npm run verify:production

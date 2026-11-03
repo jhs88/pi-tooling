@@ -14,10 +14,10 @@ const options = Object.fromEntries(process.argv.slice(2).map((arg) => {
   const index = arg.indexOf("="); if (index < 0) throw new Error("Use --option=value");
   return [arg.slice(0, index), arg.slice(index + 1)];
 }));
-if (!options["--package-dir"]) throw new Error("--package-dir must point to a scratch installation of @tintinweb/pi-subagents@0.22.0");
+if (!options["--package-dir"]) throw new Error("--package-dir must point to a scratch installation of @tintinweb/pi-subagents@0.22.0 or 0.23.0");
 const packageDir = resolve(options["--package-dir"]);
 const manifest = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
-assert.equal(manifest.name, "@tintinweb/pi-subagents"); assert.equal(manifest.version, "0.22.0");
+assert.equal(manifest.name, "@tintinweb/pi-subagents"); assert.ok(["0.22.0", "0.23.0"].includes(manifest.version));
 const root = options["--artifact-dir"] ? resolve(options["--artifact-dir"]) : await mkdtemp(join(tmpdir(), "pi-subagents-rpc-"));
 await mkdir(root, { recursive: true });
 

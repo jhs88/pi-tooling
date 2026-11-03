@@ -7,6 +7,7 @@ import type { ExtensionAPI, ExtensionToolContext, ToolDefinition, ToolLoadout, E
 import { Type, type TSchema } from "typebox";
 import register, { TOOL_ALIASES } from "./index.ts";
 import { readResult, type ToolResult } from "./visible.ts";
+import { T3_NATIVE_TOOLS } from "./t3.ts";
 
 const usage = { input: 0, output: 12, cacheRead: 0, cacheWrite: 0, totalTokens: 12, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 type Schema = TSchema & { required?: string[]; properties: Record<string, TSchema & { default?: unknown }> };
@@ -22,25 +23,26 @@ type HostOptions = {
   collision?: string;
   deny?: string;
   compat?: string;
+  t3?: "verified" | "wrong-source" | "missing-tool";
 };
 
 /** Faithful public nested dispatch fixture, including outcome errors and IDs. */
-function host({ modern = true, callable = true, workflow = true, version = "0.22.0", originalsFirst = true, collision = "", deny = "", compat }: HostOptions = {}) {
+function host({ modern = true, callable = true, workflow = true, version = "0.22.0", originalsFirst = true, collision = "", deny = "", compat, t3 }: HostOptions = {}) {
   const directory = mkdtempSync(join(tmpdir(), "subagent-tools-"));
   mkdirSync(join(directory, "src"));
   writeFileSync(join(directory, "package.json"), JSON.stringify({ name: "@tintinweb/pi-subagents", version }));
   const originals = Object.keys(TOOL_ALIASES).filter((name) => workflow || name !== "SubagentWorkflow");
   const tools = new Map<string, Definition>();
-  const handlers = new Map<string, () => void>();
+  const handlers = new Map<string, (event?: { systemPrompt?: string; toolName?: string }) => unknown>();
   const calls: { name: string; id: string; args: unknown; signal?: AbortSignal; onUpdate?: ExecuteToolOptions["onUpdate"] }[] = [];
   const hookCalls: string[] = [];
   let active: string[] = [];
   let declared: string[] = [];
   const api = {
     registerTool(tool: Definition) { if (tools.has(tool.name)) return; tools.set(tool.name, tool); active.push(tool.name); },
-    on(event: string, handler: () => void) { handlers.set(event, handler); },
+    on(event: string, handler: (event?: { systemPrompt?: string; toolName?: string }) => unknown) { handlers.set(event, handler); },
     events: { on() { return () => {}; }, emit() {} },
-    getAllTools() { return [...tools.values()].map((tool) => ({ ...tool, sourceInfo: { path: originals.includes(tool.name) ? join(directory, "src/index.ts") : "/adapter/index.ts" } })); },
+    getAllTools() { return [...tools.values()].map((tool) => ({ ...tool, sourceInfo: { path: originals.includes(tool.name) ? join(directory, "src/index.ts") : tool.name.startsWith("mcp__t3-code__") ? t3 === "wrong-source" ? "/unrelated/index.ts" : join(directory, "t3-bridge.ts") : "/adapter/index.ts" } })); },
     getActiveTools() { return active; },
     setActiveTools(names: string[]) { active = names; prepare(); },
   };
@@ -78,14 +80,20 @@ function host({ modern = true, callable = true, workflow = true, version = "0.22
     });
   }
   const previous = process.env.PI_TOOLING_SUBAGENTS_COMPAT;
+  const previousBridge = process.env.T3_PI_MCP_EXTENSION_PATH;
+  if (t3) process.env.T3_PI_MCP_EXTENSION_PATH = join(directory, "t3-bridge.ts");
+  else delete process.env.T3_PI_MCP_EXTENSION_PATH;
   if (compat === undefined) delete process.env.PI_TOOLING_SUBAGENTS_COMPAT;
   else process.env.PI_TOOLING_SUBAGENTS_COMPAT = compat;
   try {
+    if (t3) for (const name of T3_NATIVE_TOOLS.slice(0, t3 === "missing-tool" ? 2 : undefined)) api.registerTool({ name, label: name, description: "T3 native delegation", parameters: Type.Object({}), async execute() { return { content: [], details: {} }; } });
     if (collision) api.registerTool({ name: collision, label: collision, description: "Unrelated first-wins tool", parameters: Type.Object({ unrelated: Type.String() }), async execute() { return { content: [], details: {} }; } });
     if (originalsFirst) addOriginals();
     register(api as unknown as ExtensionAPI);
     if (!originalsFirst) addOriginals();
   } finally {
+    if (previousBridge === undefined) delete process.env.T3_PI_MCP_EXTENSION_PATH;
+    else process.env.T3_PI_MCP_EXTENSION_PATH = previousBridge;
     if (previous === undefined) delete process.env.PI_TOOLING_SUBAGENTS_COMPAT;
     else process.env.PI_TOOLING_SUBAGENTS_COMPAT = previous;
   }
@@ -98,8 +106,55 @@ function host({ modern = true, callable = true, workflow = true, version = "0.22
   return { tools, handlers, calls, hookCalls, active: () => active, declared: () => declared, invoke, context, api, directory, close() { rmSync(directory, { recursive: true, force: true }); } };
 }
 
-for (const compat of [undefined, "1"]) test(`compatibility enables aliases with switch ${compat ?? "unset"}`, () => {
-  const h = host({ compat });
+test("verified T3 sessions expose native delegation instead of private Pi children", () => {
+  const h = host({ t3: "verified", version: "0.23.0" });
+  try {
+    h.handlers.get("session_start")!();
+    assert.deepEqual(h.declared().sort(), [...T3_NATIVE_TOOLS].sort());
+    const start = h.handlers.get("before_agent_start")!({ systemPrompt: "Original system prompt" }) as { systemPrompt: string };
+    assert.ok(start.systemPrompt.startsWith("Original system prompt"));
+    assert.match(start.systemPrompt, /openable T3 conversation/);
+    for (const toolName of [...Object.keys(TOOL_ALIASES), ...Object.values(TOOL_ALIASES)]) {
+      const denied = h.handlers.get("tool_call")?.({ toolName }) as { block: boolean; reason: string };
+      assert.equal(denied?.block, true, `${toolName} cannot create or control private children in T3`);
+    }
+    assert.equal(h.handlers.get("tool_call")?.({ toolName: T3_NATIVE_TOOLS[1] }), undefined);
+  } finally { h.close(); }
+});
+
+test("disabling a native T3 tool restores standalone declarations without reload", () => {
+  const h = host({ t3: "verified" });
+  try {
+    h.handlers.get("session_start")!();
+    assert.equal(h.declared().includes("subagent"), false);
+    h.api.setActiveTools(h.active().filter((name) => name !== T3_NATIVE_TOOLS[1]));
+    h.handlers.get("before_agent_start")!({ systemPrompt: "Original" });
+    assert.equal(h.declared().includes("subagent"), true);
+    assert.equal(h.handlers.get("tool_call")?.({ toolName: "Agent" }), undefined);
+  } finally { h.close(); }
+});
+
+test("explicit opt-out leaves Pi tools unchanged even with a verified T3 bridge", () => {
+  const h = host({ t3: "verified", compat: "0" });
+  try {
+    assert.equal(h.handlers.size, 0);
+    assert.ok(h.declared().includes("Agent"));
+    assert.equal(h.declared().includes("subagent"), false);
+  } finally { h.close(); }
+});
+
+for (const t3 of ["wrong-source", "missing-tool"] as const) test(`unverified T3 bridge ${t3} does not change Pi delegation`, () => {
+  const h = host({ t3 });
+  try {
+    h.handlers.get("session_start")!();
+    assert.ok(h.declared().includes("subagent"));
+    assert.equal(h.handlers.get("before_agent_start")!({ systemPrompt: "Original" }), undefined);
+    assert.equal(h.handlers.get("tool_call")?.({ toolName: "Agent" }), undefined);
+  } finally { h.close(); }
+});
+
+for (const version of ["0.22.0", "0.23.0"]) for (const compat of [undefined, "1"]) test(`compatibility enables aliases for reviewed ${version} with switch ${compat ?? "unset"}`, () => {
+  const h = host({ compat, version });
   try {
     h.handlers.get("session_start")!();
     assert.deepEqual(h.declared().sort(), Object.values(TOOL_ALIASES).sort());
@@ -226,10 +281,11 @@ test("unavailable original executor leaves its declaration visible, other aliase
   } finally { h.close(); }
 });
 
-for (const version of ["0.19.0", "0.20.0", "0.21.0", "0.22.0", "0.23.0"]) test(`unreviewed or lost metadata never hides originals, initial ${version}`, () => {
+for (const version of ["0.19.0", "0.20.0", "0.21.0", "0.22.0", "0.23.0", "0.24.0"]) test(`unreviewed or lost metadata never hides originals, initial ${version}`, () => {
   const h = host({ version });
   try {
     h.handlers.get("session_start")!();
+    if (!["0.22.0", "0.23.0"].includes(version)) assert.deepEqual(h.declared().sort(), Object.keys(TOOL_ALIASES).sort());
     writeFileSync(join(h.directory, "package.json"), JSON.stringify({ name: "@tintinweb/pi-subagents", version: "0.20.0" }));
     h.handlers.get("before_agent_start")!();
     assert.deepEqual(h.declared().sort(), Object.keys(TOOL_ALIASES).sort());

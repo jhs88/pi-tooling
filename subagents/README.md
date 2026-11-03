@@ -2,7 +2,17 @@
 
 This layer is enabled by default on supported hosts. Pi and T3 need no opt-in environment variable. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable it and restart Pi after changing the switch. An explicit `1` remains supported; other explicitly set values, including `true` and an empty string, disable it as before. Both alias-name and original-name permission hooks run through Pi's supported tool pipeline. Existing original-name rules still apply; an alias does not bypass an original deny rule.
 
-Supported third-party package: `@tintinweb/pi-subagents@0.22.0`. The minimum Pi version is 1.1.0; SDK and RPC checks use Pi 1.3.0. The repository owner confirmed T3 tool visibility on the earlier baseline; the upgraded version has model-free RPC coverage, not a new T3 UI verification. The adapters require public `ToolDefinition.prepareLoadout` with registered/callable tool inventories and `ExtensionToolContext.executeTool`. Pi 0.83.0 has only tool metadata in `getAllTools()` and cannot enable these adapters. On an unsupported host, an absent dependency, an unsupported dependency version, or an unavailable original executor, the original tools remain available and the affected aliases are inactive.
+Supported third-party packages: `@tintinweb/pi-subagents@0.22.0` and `0.23.0`. The minimum Pi version is 1.1.0; development checks use Pi 1.5.0. The adapters require public `ToolDefinition.prepareLoadout` with registered/callable tool inventories and `ExtensionToolContext.executeTool`. Pi 0.83.0 has only tool metadata in `getAllTools()` and cannot enable these adapters. On an unsupported host, an absent dependency, an unsupported dependency version, or an unavailable original executor, the original tools remain available and the affected aliases are inactive.
+
+## T3 native delegation
+
+When T3's injected `mcp__t3-code__orchestrator_capabilities`, `mcp__t3-code__delegate_task`, and `mcp__t3-code__task_status` are callable and their source paths match `T3_PI_MCP_EXTENSION_PATH`, native T3 delegation takes precedence. Environment presence or similarly named tools alone does not select it. Availability is rechecked during loadout preparation. A missing or disabled bridge leaves standalone behavior unchanged.
+
+In this mode the reviewed upstream tools and owned aliases are hidden from provider requests and blocked at call time with native-delegation guidance. The model uses the existing T3 bridge directly. T3 owns child creation, task IDs, thread IDs, progress, permissions, result delivery, and cancellation. No additional HTTP client, credential handling, private child, fabricated thread, or duplicate `details.results` lifecycle is introduced. Existing T3 permission hooks still apply to native calls.
+
+Use the native capabilities tool before selecting targets or execution modes. Follow returned `next` instructions. Discover thread read/send/wait and cancellation controls through the bridge's tool search. A timeout does not cancel a child. Pi agent definitions, agent-specific tool restrictions, memory, and workflow scripts are not translated into T3 tasks; requests requiring those settings must run in standalone Pi. Existing private Pi children are not adopted into T3.
+
+`PI_TOOLING_SUBAGENTS_COMPAT=0` disables this entire layer, including the T3 preference. The execution contract below describes standalone Pi, or operation without a verified native bridge.
 
 | Original tool | Enabled tool | Behavior |
 | --- | --- | --- |
@@ -30,7 +40,7 @@ Original tools stay active and callable. `prepareLoadout.hiddenDeclarations` hid
 
 Eligibility uses registered originals independently of their active state. Disabling an original withdraws its alias. Re-enabling it restores the alias at the next agent start without reload, including when every alias was withdrawn. Current pinned-source metadata, original-schema identity, alias ownership and result-reader availability are still required.
 
-## T3 contract and limits
+## Legacy foreground progress contract and limits
 
 T3's PiAdapterV2 at source commit `0678e4e23d8675ef88f9ac08e1ae90cfe7d6ef2e` recognizes the exact tool name `subagent`. Pi forwards `onUpdate` as `tool_execution_update.partialResult` and the returned value as `tool_execution_end.result`.
 
@@ -38,7 +48,7 @@ The supported forwarding path emits an additional nested original `tool_call`, `
 
 The wrapper supplies `details.results` with a stable one-child order and `step: 0`. Entries carry `agent`, `task`, `model`, normalized assistant-text `messages`, `finished`, terminal `exitCode` and `stopReason`, `errorMessage`, and `stderr`. Foreground progress comes from the original tool's live activity. Joined-background and resumed-child progress comes from that exact child's session events. Final messages come from the real upstream output or targeted child result, not a fabricated transcript. A pre-spawn rejection has no fabricated child result. Child failures and cancellation return unsuccessful terminal entries.
 
-This is foreground progress compatibility, not full child-thread integration. It does not create independent T3 child threads, provide detached-child UX, or render workflow children as T3 subagent cards. T3 itself truncates progress to 200 characters and final text to 10,000 characters. The wrapper retains pipeline-returned content, and Pi records nested usage on the outer transcript message. Its normalized `messages` are text observations, not a complete child conversation. Use `subagent_result` with `verbose: true` for the original conversation.
+This fallback is foreground progress compatibility, not child-thread integration. Both the older reviewed T3 adapter and stable v0.1.6 assign `childThreadId: null` to these Pi-native observations, so their cards cannot open a child conversation. This is why verified T3 sessions now use native T3 delegation instead. T3 itself truncates fallback progress to 200 characters and final text to 10,000 characters. The wrapper retains pipeline-returned content, and Pi records nested usage on the outer transcript message. Its normalized `messages` are text observations, not a complete child conversation. Use `subagent_result` with `verbose: true` for the standalone Pi conversation.
 
 Final-result redaction is not streaming redaction. Pi emits original activity updates before `tool_result` hooks run. Joined and resumed progress also uses the owned child's session events. Permission hooks still gate original execution and the joined result read, but a result-read denial or final redaction cannot retract earlier live activity. Do not use this progress layer as a streaming confidentiality boundary.
 
