@@ -29,7 +29,7 @@ A real package-lifecycle change must be exercised through an isolated `pi instal
 - Preserve the explicit self-hosted-only Firecrawl policy.
 - Keep workflow invocation explicit and bounded; do not enable recursive orchestration.
 - Keep Pi host packages in peer dependencies and third-party runtime modules in dependencies.
-- Preserve provenance documents when adapting upstream code.
+- Keep upstream source attribution and license notices in the root README when adapting code.
 - Do not commit, push, open pull requests, merge, or release without explicit user direction.
 
 ## Project management
@@ -38,16 +38,8 @@ Hermes Kanban board `pi-tooling` is the active tracker and audit trail. Do not c
 
 Kanban and Pi are development coordination tools, not runtime components of this package.
 
-## Agent skills
+For board commands, routing, and triage states, read [the tracker guide](docs/agents/issue-tracker.md) before creating or updating cards.
 
-### Issue tracker
+## Domain docs
 
-Work is tracked on Hermes Kanban board `pi-tooling`. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Map the canonical five-role triage vocabulary to Kanban states. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+Use the vocabulary in `CONTEXT.md`. Read relevant [ADRs](docs/adr/README.md) before architectural changes and surface conflicts with existing decisions. Create ADRs for durable decisions; keep task state on Kanban.

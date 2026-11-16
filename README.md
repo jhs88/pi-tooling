@@ -1,106 +1,81 @@
 # Pi Tooling
 
-A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md) that adds file search, self-hosted web research, focused user interaction, background processes, and T3-compatible subagent tools.
+A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md) for file search, self-hosted web research, user questions, background processes, and subagent compatibility.
 
-## Tools
+| Capability | Tools or entry point |
+| --- | --- |
+| File search | `fd`, `rg`; system binaries or checksum-verified official downloads |
+| Web research | `search`, `scrape`, `crawl`; requires self-hosted Firecrawl |
+| User questions | `ask_user`; selectable choices and custom answers |
+| Background processes | `bg_start`, `bg_status`, `bg_list`, `bg_kill`; `/ps` in the terminal UI |
+| Subagents | Compatibility tools for separately installed `@tintinweb/pi-subagents` |
+| A2A bridge | Opt-in authenticated loopback server; [setup and configuration](a2a/README.md) |
 
-| Capability | Tools | Notes |
-| --- | --- | --- |
-| File search | `fd`, `rg` | Uses system binaries when available, with checksum-verified official fallbacks |
-| Web research | `search`, `scrape`, `crawl` | Requires an explicitly configured self-hosted Firecrawl endpoint |
-| User interaction | `ask_user` | Presents one focused question with selectable and custom-answer paths |
-| Background processes | `bg_start`, `bg_status`, `bg_list`, `bg_kill` | Runs non-interactive, session-scoped processes with bounded output |
-| Workflows | `subagent_workflow` | Standalone Pi, forwards to the separately installed subagents plugin |
+## Install and update
 
-The package supplements rather than replaces [`@tintinweb/pi-subagents`](https://www.npmjs.com/package/@tintinweb/pi-subagents).
-
-The [subagent compatibility layer](subagents/README.md) supports `@tintinweb/pi-subagents` 0.22.0 and 0.23.0. In standalone Pi it exposes `subagent`, `subagent_result`, `subagent_steer`, and an upstream-enabled `subagent_workflow`, preserving Pi's permission hooks through public nested execution.
-
-In T3 Code, a verified native delegation bridge takes precedence. Pi's private-child tools are hidden and blocked, and the agent uses T3's `delegate_task` and task/thread controls instead. Those children have real, clickable T3 conversations. Pi agent definitions and workflow scripts are not silently translated. No T3 fork or dependency patch is needed. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable this layer, including native-delegation preference.
-
-It also bundles `background-terminals` and `workflows` skills so Pi receives operational guidance alongside the specialized tools they describe.
-
-## Requirements
-
-- Pi 1.1.0 or newer with managed Git-package support
-- Node.js and npm available to Pi's package manager
-- A self-hosted Firecrawl endpoint if the web-research tools will be used
-
-Development dependencies pin the Pi host packages to 1.5.0. This baseline supports native llama.cpp decision models. Their router must be llama.cpp 0.6.0 or newer and advertise `decisions` in `architecture.output_modalities`. Pi host packages remain wildcard peers, as required for managed packages.
-
-## Install
+Requires Pi 1.1.0 or newer, Node.js 22.19.0 or newer, and npm.
 
 ```bash
 pi install git:github.com/jhs88/pi-tooling
-```
-
-Pi clones the repository and installs its production dependencies beside the extension. Do not copy the repository into `~/.pi/agent/extensions`; auto-discovered source directories do not receive the same managed dependency lifecycle.
-
-## Update
-
-Update managed extensions only:
-
-```bash
 pi update --extensions
 ```
 
-Or update Pi and all managed packages:
+Use `pi update --all` to update Pi as well. Pi manages the checkout and its production dependencies. See [package lifecycle and repair](docs/package-lifecycle.md); copying the source into `~/.pi/agent/extensions` bypasses that lifecycle.
 
-```bash
-pi update --all
-```
+## Answer questions
 
-See [`docs/package-lifecycle.md`](docs/package-lifecycle.md) for dependency reconciliation and repair instructions.
+`ask_user` asks one question with 2–5 choices. In T3 Code it uses native question cards through Pi's RPC dialogs. Select a choice or type an answer; clients without inline entry offer **Write my own answer…**.
 
-## Subagent native MCP compatibility
-
-Use `@tintinweb/pi-subagents@0.23.0` with Pi 1.1.0 or newer. Version 0.22.0 remains supported. Native MCP, codemode, tool search, project trust, and nested tool scoping are supplied by upstream. No source patch is needed. The development and RPC verification baseline is Pi 1.5.0.
-
-Children with extensions enabled can start their own MCP servers. Use `extensions: false`, `isolated: true`, or `exclude_extensions: builtin:mcp` when they should not. Restricted MCP access uses explicit `ext:builtin:mcp/<tool>` selectors. The obsolete native MCP patch and command have been removed. Use explicit extension selectors for restricted agents; bare MCP tool names are not an authorization boundary.
+In Pi's terminal UI, use arrows or a number to highlight a choice and Enter to confirm. Start typing or paste to write a custom answer. Press Tab first for an answer beginning with a number. From the editor, Tab or Esc returns to the choices and preserves your draft; Enter submits nonempty text. Esc from the choices dismisses the question. Dismissal or cancellation does not select an answer. Headless modes return guidance to ask in plain text.
 
 ## Configure Firecrawl
 
-Set the self-hosted endpoint in the process environment or in `~/.pi/agent/.env`:
+Set the endpoint in the process environment or `~/.pi/agent/.env`; process values take precedence.
 
 ```dotenv
 FIRECRAWL_API_URL=https://firecrawl.example.com
-# Optional when the self-hosted service requires authentication:
+# Optional authentication for your self-hosted service:
 FIRECRAWL_API_KEY=<optional-key>
 ```
 
-Configuration precedence is:
+An explicit self-hosted HTTP(S) endpoint is required. There is no Firecrawl Cloud fallback.
 
-1. process environment;
-2. Pi's `agent/.env`.
+## Subagents
 
-Only explicit HTTP(S) endpoints are accepted. The public Firecrawl Cloud endpoint is never selected as a fallback.
+The [compatibility layer](subagents/README.md) supports `@tintinweb/pi-subagents` 0.22.0 and 0.23.0. Standalone Pi uses that package's tools, permission hooks, MCP support, and explicitly invoked workflows. Install it separately.
 
-## Safety defaults
-
-- Standalone Pi workflow execution uses the upstream subagents plugin, including its scheduling, limits, progress UI, and same-session replay. Pi Tooling does not impose a separate three-child cap. T3 sessions use native delegation instead; Pi-specific workflows require standalone Pi.
-- Background processes are non-interactive, session-owned, output-bounded, redacted, and terminated as process trees.
-- Firecrawl output is bounded, persisted when oversized, and cancellable.
-- Downloaded `fd` and `rg` fallbacks use pinned checksums from official release assets.
+In verified T3 Code sessions, the layer prefers T3's native delegation tools so child conversations can be opened in T3. Pi agent definitions and workflow scripts are not translated. Set `PI_TOOLING_SUBAGENTS_COMPAT=0` to disable the layer, including native preference. See the [compatibility guide](subagents/README.md) for tool names, permissions, and child isolation settings.
 
 ## Development
+
+Read [CONTEXT.md](CONTEXT.md) and [AGENTS.md](AGENTS.md) before changing architecture or runtime behavior.
 
 ```bash
 npm ci
 npm run verify
 ```
 
-The verification command runs TypeScript checks and the complete test suite. For packaging changes, also verify a production-only installation:
+Verification runs TypeScript checks and the complete test suite. Packaging changes also require the production dependency checks in [AGENTS.md](AGENTS.md). `npm run verify:production` tests an isolated production install and the headless A2A runtime check.
 
-```bash
-rm -rf node_modules
-npm ci --omit=dev --ignore-scripts
-test -f node_modules/@effect/platform-node/package.json
-```
-
-Read [`CONTEXT.md`](CONTEXT.md) and [`AGENTS.md`](AGENTS.md) before changing architecture or runtime behavior. Runtime state such as `node_modules`, downloaded binaries, workflow artifacts, and terminal logs is not committed.
+[Architecture decisions](docs/adr/README.md) record durable choices. Hermes Kanban board `pi-tooling` tracks active work; [docs/history](docs/history/) preserves the read-only planning archive.
 
 ## Attribution
 
-The implementation is adapted from [`davis7dotsh/my-pi-setup@797eaf6`](https://github.com/davis7dotsh/my-pi-setup/tree/797eaf6d6f178759cf7aabde927ef15c91346e7e). Component-specific adaptation notes are recorded in the `PROVENANCE.md` files and supporting historical research under `docs/history/`.
+- Selected extensions, shared helpers, and skills adapt [`davis7dotsh/my-pi-setup@797eaf6`](https://github.com/davis7dotsh/my-pi-setup/tree/797eaf6d6f178759cf7aabde927ef15c91346e7e). Terminal hardening also references [`73bf4d8`](https://github.com/davis7dotsh/my-pi-setup/tree/73bf4d826f39b5cab6b7865e706ba4a2669629ca). No license was detected at `797eaf6`.
+- The inbound A2A server adapts [`DrOlu/pi-a2a-communication@497ec9f`](https://github.com/DrOlu/pi-a2a-communication/tree/497ec9fe22620ee51473854cf0d7001cfe409054), under the MIT notice below.
+- The subagent adapter is local integration code for [`@tintinweb/pi-subagents`](https://www.npmjs.com/package/@tintinweb/pi-subagents); its source is not vendored here.
 
-The pinned upstream snapshot had no detected license. The provenance records document that limitation and the scope of the adaptations.
+<details>
+<summary>A2A source license (MIT)</summary>
+
+MIT License
+
+Copyright (c) 2026 pi-extensions
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+</details>

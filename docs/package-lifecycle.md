@@ -15,7 +15,7 @@ pi update --extensions
 pi update --all
 ```
 
-An unchanged managed checkout is not rebuilt. To repair a manually deleted or corrupted checkout, remove and reinstall the package:
+At an unchanged Git ref, Pi skips reinstalling dependencies unless a direct dependency directory is missing or an incomplete-install marker is present. These checks do not validate dependency contents. To force a clean installation, remove and reinstall the package:
 
 ```bash
 pi remove git:github.com/jhs88/pi-tooling

@@ -16,13 +16,14 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { Crypto, Data, Effect, Encoding, FileSystem, Stream } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { Data, Effect, FileSystem, Stream } from "effect";
+import { FetchHttpClient, HttpClient } from "effect/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const execFileAsync = promisify(execFile);
 
@@ -353,13 +354,11 @@ export const liveBinaryEnv: BinaryEnv = {
       const url = new URL(asset.url);
       const client = yield* HttpClient.HttpClient;
       const fs = yield* FileSystem.FileSystem;
-      const crypto = yield* Crypto.Crypto;
       const bytes = yield* downloadAsset(client, url).pipe(
         Effect.timeout(DOWNLOAD_TIMEOUT_MS),
       );
 
-      const digestBytes = yield* crypto.digest("SHA-256", bytes);
-      const digest = Encoding.encodeHex(digestBytes);
+      const digest = createHash("sha256").update(bytes).digest("hex");
       if (digest !== asset.sha256) {
         return yield* Effect.fail(
           new Error(
@@ -392,7 +391,7 @@ export const liveBinaryEnv: BinaryEnv = {
 
       const extracted = join(workDir, asset.archiveDir, asset.binaryName);
       yield* fs.makeDirectory(dirname(destination), { recursive: true });
-      const uuid = yield* crypto.randomUUIDv4;
+      const uuid = randomUUID();
       const stagedDestination = `${destination}.${process.pid}.${uuid}.tmp`;
       yield* Effect.addFinalizer(() =>
         fs.remove(stagedDestination, { force: true }).pipe(Effect.orDie),
