@@ -33,16 +33,16 @@ export async function authenticatedFetch(
   return fetch(url, { ...init, headers });
 }
 
-export async function postJson(
-  url: string,
-  body: unknown,
-  token = TEST_TOKEN,
-) {
-  return authenticatedFetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }, token);
+export async function postJson(url: string, body: unknown, token = TEST_TOKEN) {
+  return authenticatedFetch(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    token,
+  );
 }
 
 export async function startOnEphemeralPort(server: PiA2AServer) {

@@ -84,38 +84,45 @@ export function createA2ARegistration(
 
     const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
       const result = transition.then(operation, operation);
-      transition = result.then(() => undefined, () => undefined);
+      transition = result.then(
+        () => undefined,
+        () => undefined,
+      );
       return result;
     };
 
-    const start = (cwd: string) => serialize(async () => {
-      if (running?.server.isRunning) return running;
-      const host = dependencies.createHost({
-        cwd,
-        agentDir: dependencies.agentDir,
-        maxContexts: loadA2AHostConfig(dependencies.env).maxContexts,
+    const start = (cwd: string) =>
+      serialize(async () => {
+        if (running?.server.isRunning) return running;
+        const host = dependencies.createHost({
+          cwd,
+          agentDir: dependencies.agentDir,
+          maxContexts: loadA2AHostConfig(dependencies.env).maxContexts,
+        });
+        const server = dependencies.createServer((input) =>
+          host.execute(input),
+        );
+        try {
+          await server.start();
+        } catch (error) {
+          await host.close().catch(() => {});
+          throw error;
+        }
+        running = { cwd, host, server };
+        return running;
       });
-      const server = dependencies.createServer((input) => host.execute(input));
-      try {
-        await server.start();
-      } catch (error) {
-        await host.close().catch(() => {});
-        throw error;
-      }
-      running = { cwd, host, server };
-      return running;
-    });
 
-    const stop = () => serialize(async () => {
-      const current = running;
-      if (!current) return;
-      running = undefined;
-      try {
-        await current.server.stop();
-      } finally {
-        await current.host.close();
-      }
-    });
+    const stop = () =>
+      serialize(async () => {
+        const current = running;
+        if (!current) return;
+        running = undefined;
+        try {
+          await current.server.stop();
+        } finally {
+          await current.host.close();
+        }
+      });
 
     const status = () => {
       if (!running?.server.isRunning) return "A2A server is stopped";
@@ -150,7 +157,9 @@ export function createA2ARegistration(
           ctx.ui.notify("Usage: /a2a-server start|stop|status", "warning");
         } catch (error) {
           ctx.ui.notify(
-            error instanceof Error ? error.message : "A2A server operation failed",
+            error instanceof Error
+              ? error.message
+              : "A2A server operation failed",
             "error",
           );
         }
@@ -167,13 +176,16 @@ export function createA2ARegistration(
       if (
         dependencies.env.PI_A2A_AUTO_START !== "true" &&
         pi.getFlag("a2a-server") !== true
-      ) return;
+      )
+        return;
       try {
         await start(ctx.cwd);
         ctx.ui.notify(status(), "info");
       } catch (error) {
         ctx.ui.notify(
-          error instanceof Error ? error.message : "A2A server auto-start failed",
+          error instanceof Error
+            ? error.message
+            : "A2A server auto-start failed",
           "error",
         );
       }

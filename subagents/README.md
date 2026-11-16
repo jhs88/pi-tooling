@@ -14,12 +14,12 @@ Use the native capabilities tool before selecting targets or execution modes. Fo
 
 `PI_TOOLING_SUBAGENTS_COMPAT=0` disables this entire layer, including the T3 preference. The execution contract below describes standalone Pi, or operation without a verified native bridge.
 
-| Original tool | Enabled tool | Behavior |
-| --- | --- | --- |
-| `Agent` | `subagent` | Runs one child and waits until it settles |
-| `get_subagent_result` | `subagent_result` | Original status, wait, verbose, ID and handle behavior |
-| `steer_subagent` | `subagent_steer` | Original steering behavior |
-| `SubagentWorkflow` | `subagent_workflow` | Original background workflow behavior, if enabled upstream |
+| Original tool         | Enabled tool        | Behavior                                                   |
+| --------------------- | ------------------- | ---------------------------------------------------------- |
+| `Agent`               | `subagent`          | Runs one child and waits until it settles                  |
+| `get_subagent_result` | `subagent_result`   | Original status, wait, verbose, ID and handle behavior     |
+| `steer_subagent`      | `subagent_steer`    | Original steering behavior                                 |
+| `SubagentWorkflow`    | `subagent_workflow` | Original background workflow behavior, if enabled upstream |
 
 `subagent_workflow` forwards to the upstream workflow engine. There is no separate Pi Tooling `workflow` tool or `/workflows` command. Upstream enables workflows by default; `workflowsEnabled: false` disables them. A competing extension's `workflow`, `Workflow`, or `SubagentWorkflow` can cause upstream to stand down unless explicitly enabled. The adapter respects that decision. Use `/agents` → Workflows for inspection and the bundled workflow skill for invocation guidance. Upstream owns scheduling and limits, without a Pi Tooling three-child cap. Standalone A2A child policy still excludes orchestration tools.
 

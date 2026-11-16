@@ -24,7 +24,8 @@ test("extension registers search, crawl, and scrape without reading configuratio
 test("scrape schema bounds model-controlled wait and timeout values", () => {
   const registered: Array<{ name: string; parameters: unknown }> = [];
   firecrawlTools({
-    registerTool: (tool: { name: string; parameters: unknown }) => registered.push(tool),
+    registerTool: (tool: { name: string; parameters: unknown }) =>
+      registered.push(tool),
   } as unknown as ExtensionAPI);
   const scrape = registered.find((tool) => tool.name === "scrape");
   assert.ok(scrape);
@@ -126,12 +127,19 @@ test("configuration does not read unrelated environment files", async () => {
 });
 
 test("oversized Firecrawl output is bounded and persisted", async () => {
-  const value = Array.from({ length: 3000 }, (_, index) => `line-${index}`).join("\n");
+  const value = Array.from(
+    { length: 3000 },
+    (_, index) => `line-${index}`,
+  ).join("\n");
   let persisted: string | undefined;
-  const formatted = await formatFirecrawlOutput(value, "search", async (full) => {
-    persisted = full;
-    return "/tmp/pi-firecrawl-test/search.json";
-  });
+  const formatted = await formatFirecrawlOutput(
+    value,
+    "search",
+    async (full) => {
+      persisted = full;
+      return "/tmp/pi-firecrawl-test/search.json";
+    },
+  );
   assert.equal(persisted, value);
   assert.match(formatted, /Output truncated: 2000 of 3000 lines/);
 });

@@ -52,17 +52,17 @@ The working directory is fixed to the current directory when either server form 
 
 ## Configuration
 
-| Variable | Default | Constraint |
-|---|---:|---|
-| `PI_A2A_BEARER_TOKEN` | none | Required and non-empty |
-| `PI_A2A_HOST` | `127.0.0.1` | `127.0.0.1`, `::1`, or `localhost` |
-| `PI_A2A_PORT` | `10000` | 1–65535 |
-| `PI_A2A_MAX_BODY_BYTES` | `1048576` | Hard maximum of 1 MiB |
-| `PI_A2A_MAX_TASKS` | `256` | Integer from 1 through 1024 |
-| `PI_A2A_MAX_CONTEXTS` | `256` | Persistent mappings per workspace; integer from 1 through 1024 |
-| `PI_A2A_EXECUTION_TIMEOUT_MS` | `300000` | Positive integer |
-| `PI_A2A_AUTO_START` | unset | Starts only when exactly `true` |
-| `PI_A2A_PI_PACKAGE` | automatic | Optional absolute Pi host-package directory for headless resolution |
+| Variable                      |     Default | Constraint                                                          |
+| ----------------------------- | ----------: | ------------------------------------------------------------------- |
+| `PI_A2A_BEARER_TOKEN`         |        none | Required and non-empty                                              |
+| `PI_A2A_HOST`                 | `127.0.0.1` | `127.0.0.1`, `::1`, or `localhost`                                  |
+| `PI_A2A_PORT`                 |     `10000` | 1–65535                                                             |
+| `PI_A2A_MAX_BODY_BYTES`       |   `1048576` | Hard maximum of 1 MiB                                               |
+| `PI_A2A_MAX_TASKS`            |       `256` | Integer from 1 through 1024                                         |
+| `PI_A2A_MAX_CONTEXTS`         |       `256` | Persistent mappings per workspace; integer from 1 through 1024      |
+| `PI_A2A_EXECUTION_TIMEOUT_MS` |    `300000` | Positive integer                                                    |
+| `PI_A2A_AUTO_START`           |       unset | Starts only when exactly `true`                                     |
+| `PI_A2A_PI_PACKAGE`           |   automatic | Optional absolute Pi host-package directory for headless resolution |
 
 ## Persistence and lifecycle
 

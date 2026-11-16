@@ -95,9 +95,7 @@ export function resolveFirecrawlConfig(
 
   const parsed = new URL(apiUrl);
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new FirecrawlConfigError(
-      "FIRECRAWL_API_URL must use http or https.",
-    );
+    throw new FirecrawlConfigError("FIRECRAWL_API_URL must use http or https.");
   }
   if (parsed.hostname.toLowerCase() === "api.firecrawl.dev") {
     throw new FirecrawlConfigError(

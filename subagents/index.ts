@@ -1,8 +1,19 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ExtensionAPI, ExtensionToolContext, ToolDefinition, ToolLoadout } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionToolContext,
+  ToolDefinition,
+  ToolLoadout,
+} from "@earendil-works/pi-coding-agent";
 import { Type, type TSchema } from "typebox";
-import { executeVisibleSubagent, readResult, readArgs, type ExecutableTool, type ToolResult } from "./visible.ts";
+import {
+  executeVisibleSubagent,
+  readResult,
+  readArgs,
+  type ExecutableTool,
+  type ToolResult,
+} from "./visible.ts";
 import { hasT3DelegationBridge, T3_DELEGATION_GUIDANCE } from "./t3.ts";
 import { isReviewedSubagentsVersion } from "./versions.ts";
 
@@ -14,16 +25,27 @@ export const TOOL_ALIASES = {
 } as const;
 
 type RegisteredTool = ToolLoadout["registered"][number];
-type SchemaNode = TSchema & { description?: string; default?: unknown; properties?: Record<string, SchemaNode> };
+type SchemaNode = TSchema & {
+  description?: string;
+  default?: unknown;
+  properties?: Record<string, SchemaNode>;
+};
 
 /** Forward through the supported pipeline, never a raw registered executor. */
-function executable(tool: RegisteredTool, ctx: ExtensionToolContext): ExecutableTool {
+function executable(
+  tool: RegisteredTool,
+  ctx: ExtensionToolContext,
+): ExecutableTool {
   return {
-    name: tool.name, description: tool.description, parameters: tool.parameters,
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
     async execute(_id, args, signal, onUpdate) {
       const outcome = await ctx.executeTool(tool.name, args, {
         signal,
-        onUpdate: onUpdate ? (partial) => onUpdate(readResult(partial)) : undefined,
+        onUpdate: onUpdate
+          ? (partial) => onUpdate(readResult(partial))
+          : undefined,
       });
       return readResult({ ...outcome.result, isError: outcome.isError });
     },
@@ -37,24 +59,31 @@ function withoutNestedUsage(result: ToolResult): ToolResult {
 }
 
 function rename(text: string): string {
-  return text.replace(/\b(Agent|get_subagent_result|steer_subagent|SubagentWorkflow)\b/g,
-    (name) => TOOL_ALIASES[name as keyof typeof TOOL_ALIASES]);
+  return text.replace(
+    /\b(Agent|get_subagent_result|steer_subagent|SubagentWorkflow)\b/g,
+    (name) => TOOL_ALIASES[name as keyof typeof TOOL_ALIASES],
+  );
 }
 
 function renameSchemaDescriptions(value: unknown): void {
   if (!value || typeof value !== "object") return;
   const schema = value as Record<string, unknown>;
   for (const [key, value] of Object.entries(schema)) {
-    if ((key === "description" || key === "title") && typeof value === "string") schema[key] = rename(value);
+    if ((key === "description" || key === "title") && typeof value === "string")
+      schema[key] = rename(value);
     else renameSchemaDescriptions(value);
   }
 }
 
 const descriptions: Record<string, string> = {
-  Agent: "Run one delegated task and wait for its result. Foreground only; background and scheduled requests are rejected. Do not duplicate delegated work.",
-  get_subagent_result: "Read a subagent's status and result by ID or handle. Set wait to wait for completion and verbose for the conversation.",
-  steer_subagent: "Send a steering message to a running subagent by ID or handle.",
-  SubagentWorkflow: "Start a subagent workflow script in the background. Accepts inline source, a script path, a saved name, arguments and a previous run ID.",
+  Agent:
+    "Run one delegated task and wait for its result. Foreground only; background and scheduled requests are rejected. Do not duplicate delegated work.",
+  get_subagent_result:
+    "Read a subagent's status and result by ID or handle. Set wait to wait for completion and verbose for the conversation.",
+  steer_subagent:
+    "Send a steering message to a running subagent by ID or handle.",
+  SubagentWorkflow:
+    "Start a subagent workflow script in the background. Accepts inline source, a script path, a saved name, arguments and a previous run ID.",
 };
 
 /** Only reviewed releases of the separate npm package are eligible targets. */
@@ -62,9 +91,20 @@ export function isPinnedSubagentsSource(path: string): boolean {
   let directory = dirname(path);
   for (;;) {
     try {
-      const pkg: unknown = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
-      return pkg !== null && typeof pkg === "object" && "name" in pkg && "version" in pkg && pkg.name === "@tintinweb/pi-subagents" && isReviewedSubagentsVersion(pkg.version);
-    } catch { /* walk to the package root */ }
+      const pkg: unknown = JSON.parse(
+        readFileSync(join(directory, "package.json"), "utf8"),
+      );
+      return (
+        pkg !== null &&
+        typeof pkg === "object" &&
+        "name" in pkg &&
+        "version" in pkg &&
+        pkg.name === "@tintinweb/pi-subagents" &&
+        isReviewedSubagentsVersion(pkg.version)
+      );
+    } catch {
+      /* walk to the package root */
+    }
     const parent = dirname(directory);
     if (parent === directory) return false;
     directory = parent;
@@ -92,11 +132,18 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
     // not only callable tools or the original paired with this active hook.
     // Reconciliation below independently checks current activation and ownership.
     loadoutSupported = Array.isArray(loadout.callable);
-    t3Delegation = loadoutSupported && hasT3DelegationBridge(pi.getAllTools(), loadout.callable, t3ExtensionPath);
+    t3Delegation =
+      loadoutSupported &&
+      hasT3DelegationBridge(
+        pi.getAllTools(),
+        loadout.callable,
+        t3ExtensionPath,
+      );
     candidates.clear();
     for (const original of Object.keys(TOOL_ALIASES)) {
       const tool = loadout.registered.find((entry) => entry.name === original);
-      if (tool && typeof tool.execute === "function") candidates.set(original, tool);
+      if (tool && typeof tool.execute === "function")
+        candidates.set(original, tool);
     }
     usageReader = candidates.get("get_subagent_result");
   }
@@ -114,7 +161,10 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
         // leave originals visible, not enable raw-executor forwarding.
         refreshRegisteredOriginals(loadout);
         // A first-wins alias from another extension must never be changed here.
-        if (loadout.registered.find((entry) => entry.name === alias)?.parameters !== parameters) {
+        if (
+          loadout.registered.find((entry) => entry.name === alias)
+            ?.parameters !== parameters
+        ) {
           return {};
         }
         const tool = candidates.get(original);
@@ -123,24 +173,40 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
           const schema = structuredClone(tool.parameters) as SchemaNode;
           renameSchemaDescriptions(schema);
           if (original === "Agent" && schema.properties?.run_in_background) {
-            schema.properties.run_in_background.description = "Foreground only. Defaults to false. Explicit true is rejected before starting a child.";
+            schema.properties.run_in_background.description =
+              "Foreground only. Defaults to false. Explicit true is rejected before starting a child.";
             schema.properties.run_in_background.default = false;
           }
-          if (original === "Agent" && schema.properties?.resume) schema.properties.resume.description = "Resume a settled child by ID and wait for its result. Use subagent_steer for a running child.";
-          if (original === "Agent" && schema.properties?.schedule) schema.properties.schedule.description = "Not supported by foreground subagent. Omit this field.";
-          for (const key of Reflect.ownKeys(parameters)) Reflect.deleteProperty(parameters, key);
+          if (original === "Agent" && schema.properties?.resume)
+            schema.properties.resume.description =
+              "Resume a settled child by ID and wait for its result. Use subagent_steer for a running child.";
+          if (original === "Agent" && schema.properties?.schedule)
+            schema.properties.schedule.description =
+              "Not supported by foreground subagent. Omit this field.";
+          for (const key of Reflect.ownKeys(parameters))
+            Reflect.deleteProperty(parameters, key);
           Object.assign(parameters, schema);
         }
         return {
           hiddenDeclarations: t3Delegation
-            ? [...nativeSuppressed].filter((name) => loadout.callable.some((entry) => entry.name === name)).concat(alias)
-            : loadoutSupported && !executionUnsupported && approved.has(original) && candidates.has(original)
-              && loadout.callable.some((entry) => entry.name === original) ? [original] : [],
+            ? [...nativeSuppressed]
+                .filter((name) =>
+                  loadout.callable.some((entry) => entry.name === name),
+                )
+                .concat(alias)
+            : loadoutSupported &&
+                !executionUnsupported &&
+                approved.has(original) &&
+                candidates.has(original) &&
+                loadout.callable.some((entry) => entry.name === original)
+              ? [original]
+              : [],
           descriptions: { [alias]: descriptions[original] },
         };
       },
       async execute(id, rawArgs, signal, onUpdate, ctx) {
-        if (t3Delegation && nativeSuppressed.has(original)) throw new Error(T3_DELEGATION_GUIDANCE);
+        if (t3Delegation && nativeSuppressed.has(original))
+          throw new Error(T3_DELEGATION_GUIDANCE);
         const args = readArgs(rawArgs);
         const candidate = candidates.get(original);
         if (typeof ctx?.executeTool !== "function") {
@@ -149,19 +215,43 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
           // No raw-executor fallback, even if the host advertised a modern
           // loadout shape. Withdraw owned aliases and unhide all originals.
           const all = pi.getAllTools();
-          const ownedAliases = new Set([...aliasSchemas].filter(([name, schema]) => all.find((tool) => tool.name === name)?.parameters === schema).map(([name]) => name));
-          pi.setActiveTools(pi.getActiveTools().filter((name) => !ownedAliases.has(name)));
-          throw new Error(`${alias} requires ExtensionToolContext.executeTool.`);
+          const ownedAliases = new Set(
+            [...aliasSchemas]
+              .filter(
+                ([name, schema]) =>
+                  all.find((tool) => tool.name === name)?.parameters === schema,
+              )
+              .map(([name]) => name),
+          );
+          pi.setActiveTools(
+            pi.getActiveTools().filter((name) => !ownedAliases.has(name)),
+          );
+          throw new Error(
+            `${alias} requires ExtensionToolContext.executeTool.`,
+          );
         }
-        if (shutDown || !approved.has(original) || !candidate) throw new Error(`${alias} is unavailable in this session.`);
+        if (shutDown || !approved.has(original) || !candidate)
+          throw new Error(`${alias} is unavailable in this session.`);
         const tool = executable(candidate, ctx);
         // Controls and workflow retain their original execution semantics.
         if (original !== "Agent") {
           const result = await tool.execute(id, args, signal, onUpdate);
-          if (original !== "SubagentWorkflow" || !result.details?.taskId) return withoutNestedUsage(result);
-          return withoutNestedUsage({ ...result, content: result.content.map((item) => item.type === "text"
-            ? { ...item, text: item.text.replace(/\nTo iterate, edit the script file and call SubagentWorkflow again with scriptPath\.$/, "\nTo iterate, edit the script file and call subagent_workflow again with scriptPath.") }
-            : item) });
+          if (original !== "SubagentWorkflow" || !result.details?.taskId)
+            return withoutNestedUsage(result);
+          return withoutNestedUsage({
+            ...result,
+            content: result.content.map((item) =>
+              item.type === "text"
+                ? {
+                    ...item,
+                    text: item.text.replace(
+                      /\nTo iterate, edit the script file and call SubagentWorkflow again with scriptPath\.$/,
+                      "\nTo iterate, edit the script file and call subagent_workflow again with scriptPath.",
+                    ),
+                  }
+                : item,
+            ),
+          });
         }
         const controller = new AbortController();
         const abort = () => controller.abort(signal?.reason);
@@ -169,7 +259,17 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
         signal?.addEventListener("abort", abort, { once: true });
         calls.add(controller);
         try {
-          return withoutNestedUsage(await executeVisibleSubagent(tool, id, args, controller.signal, onUpdate, pi.events, usageReader ? executable(usageReader, ctx) : undefined));
+          return withoutNestedUsage(
+            await executeVisibleSubagent(
+              tool,
+              id,
+              args,
+              controller.signal,
+              onUpdate,
+              pi.events,
+              usageReader ? executable(usageReader, ctx) : undefined,
+            ),
+          );
         } finally {
           signal?.removeEventListener("abort", abort);
           calls.delete(controller);
@@ -188,23 +288,40 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
     for (const [original, alias] of Object.entries(TOOL_ALIASES)) {
       const current = all.find((tool) => tool.name === original);
       const source = current?.sourceInfo.path;
-      const reviewedOriginal = loadoutSupported && candidates.has(original)
-        && current?.parameters === candidates.get(original)?.parameters && source && isPinnedSubagentsSource(source);
+      const reviewedOriginal =
+        loadoutSupported &&
+        candidates.has(original) &&
+        current?.parameters === candidates.get(original)?.parameters &&
+        source &&
+        isPinnedSubagentsSource(source);
       // Suppressing a private backend is independent of whether its result reader
       // is active or whether its corresponding public alias belongs to us.
       if (t3Delegation && reviewedOriginal) nativeSuppressed.add(original);
-      if (all.find((tool) => tool.name === alias)?.parameters !== aliasSchemas.get(alias)) continue;
+      if (
+        all.find((tool) => tool.name === alias)?.parameters !==
+        aliasSchemas.get(alias)
+      )
+        continue;
       if (t3Delegation) {
         // Keep our declaration hooks active, but never expose or execute aliases.
         active.add(alias);
         continue;
       }
       // Respect upstream collision resolution and user-disabled originals.
-      if (!executionUnsupported && reviewedOriginal
-        && (original !== "Agent" || reader && active.has(reader.name)
-          && all.find((tool) => tool.name === reader.name)?.parameters === reader.parameters
-          && isPinnedSubagentsSource(all.find((tool) => tool.name === reader.name)?.sourceInfo.path ?? ""))
-        && active.has(original)) {
+      if (
+        !executionUnsupported &&
+        reviewedOriginal &&
+        (original !== "Agent" ||
+          (reader &&
+            active.has(reader.name) &&
+            all.find((tool) => tool.name === reader.name)?.parameters ===
+              reader.parameters &&
+            isPinnedSubagentsSource(
+              all.find((tool) => tool.name === reader.name)?.sourceInfo.path ??
+                "",
+            ))) &&
+        active.has(original)
+      ) {
         approved.add(original);
         // Originals must stay active and callable for ctx.executeTool. Only
         // their declarations are hidden from provider requests by the hook.
@@ -214,18 +331,31 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
     pi.setActiveTools([...active]);
   }
 
-  pi.on("session_start", () => { shutDown = false; reconcile(); });
+  pi.on("session_start", () => {
+    shutDown = false;
+    reconcile();
+  });
   pi.on("before_agent_start", (event) => {
     reconcile();
-    if (t3Delegation) return { systemPrompt: `${event.systemPrompt}\n\n${T3_DELEGATION_GUIDANCE}` };
+    if (t3Delegation)
+      return {
+        systemPrompt: `${event.systemPrompt}\n\n${T3_DELEGATION_GUIDANCE}`,
+      };
   });
   pi.on("tool_call", (event) => {
     if (!t3Delegation) return;
-    const original = Object.entries(TOOL_ALIASES).find(([name, alias]) => event.toolName === name || event.toolName === alias)?.[0];
+    const original = Object.entries(TOOL_ALIASES).find(
+      ([name, alias]) => event.toolName === name || event.toolName === alias,
+    )?.[0];
     if (!original || !nativeSuppressed.has(original)) return;
     const alias = TOOL_ALIASES[original as keyof typeof TOOL_ALIASES];
     // Do not intercept an unrelated first-wins alias owned by another extension.
-    if (event.toolName === alias && pi.getAllTools().find((tool) => tool.name === alias)?.parameters !== aliasSchemas.get(alias)) return;
+    if (
+      event.toolName === alias &&
+      pi.getAllTools().find((tool) => tool.name === alias)?.parameters !==
+        aliasSchemas.get(alias)
+    )
+      return;
     return { block: true, reason: T3_DELEGATION_GUIDANCE };
   });
   pi.on("session_shutdown", () => {
@@ -233,6 +363,7 @@ export default function registerSubagentCompatibility(pi: ExtensionAPI): void {
     approved.clear();
     nativeSuppressed.clear();
     candidates.clear();
-    for (const controller of calls) controller.abort(new Error("Session shut down"));
+    for (const controller of calls)
+      controller.abort(new Error("Session shut down"));
   });
 }

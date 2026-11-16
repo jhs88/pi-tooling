@@ -30,7 +30,8 @@ jobs:
           node --experimental-strip-types --input-type=module -e 'import { REVIEWED_SUBAGENTS_VERSIONS } from "./subagents/versions.ts"; console.log(`versions=${JSON.stringify(REVIEWED_SUBAGENTS_VERSIONS)}`)' >> "$GITHUB_OUTPUT"
       - run: npm run verify
       - name: Exercise real Pi RPC without inference
-        run: node subagents/rpc-smoke.mjs --pi="$PWD/node_modules/.bin/pi" --package-dir="$PWD/node_modules/@tintinweb/pi-subagents"
+        run: node subagents/rpc-smoke.mjs --pi="$PWD/node_modules/.bin/pi"
+          --package-dir="$PWD/node_modules/@tintinweb/pi-subagents"
       - run: npm run verify:production
 
   subagent-compatibility:
@@ -51,5 +52,7 @@ jobs:
       - name: Install reviewed upstream release
         env:
           SUBAGENT_VERSION: ${{ matrix.version }}
-        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund "@tintinweb/pi-subagents@$SUBAGENT_VERSION"
+        run:
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit
+          --no-fund "@tintinweb/pi-subagents@$SUBAGENT_VERSION"
       - run: npm run verify:subagents

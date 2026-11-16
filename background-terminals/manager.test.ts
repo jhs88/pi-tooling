@@ -10,7 +10,11 @@ import {
 } from "./src/manager.ts";
 
 const cwd = process.cwd();
-const shell = { executable: "/bin/sh", prefixArgs: ["-c"], description: "/bin/sh -c" };
+const shell = {
+  executable: "/bin/sh",
+  prefixArgs: ["-c"],
+  description: "/bin/sh -c",
+};
 
 function processGone(pid: number) {
   try {
@@ -32,15 +36,27 @@ async function pollUntil(check: () => boolean, timeoutMs = 5_000) {
 
 test("shell selection matches zsh-user-bash policy and is explicit", () => {
   assert.deepEqual(
-    selectShellInvocation("echo ok", "linux", { PI_USER_BASH_SHELL: "/opt/zsh" }),
-    { executable: "/opt/zsh", args: ["-fc", "echo ok"], description: "/opt/zsh -fc" },
+    selectShellInvocation("echo ok", "linux", {
+      PI_USER_BASH_SHELL: "/opt/zsh",
+    }),
+    {
+      executable: "/opt/zsh",
+      args: ["-fc", "echo ok"],
+      description: "/opt/zsh -fc",
+    },
   );
   assert.deepEqual(
     selectShellInvocation("echo ok", "linux", { SHELL: "/usr/local/bin/zsh" }),
-    { executable: "/usr/local/bin/zsh", args: ["-fc", "echo ok"], description: "/usr/local/bin/zsh -fc" },
+    {
+      executable: "/usr/local/bin/zsh",
+      args: ["-fc", "echo ok"],
+      description: "/usr/local/bin/zsh -fc",
+    },
   );
   assert.deepEqual(
-    selectShellInvocation("echo ok", "win32", { ComSpec: "C:\\Windows\\cmd.exe" }),
+    selectShellInvocation("echo ok", "win32", {
+      ComSpec: "C:\\Windows\\cmd.exe",
+    }),
     {
       executable: "C:\\Windows\\cmd.exe",
       args: ["/d", "/s", "/c", "echo ok"],
@@ -54,10 +70,17 @@ test("parallel starts atomically enforce the eight-process cap", async () => {
   try {
     const starts = await Promise.allSettled(
       Array.from({ length: MAX_RUNNING + 1 }, (_, index) =>
-        manager.start({ command: "while :; do sleep 1; done", title: `job-${index}`, cwd }),
+        manager.start({
+          command: "while :; do sleep 1; done",
+          title: `job-${index}`,
+          cwd,
+        }),
       ),
     );
-    assert.equal(starts.filter((result) => result.status === "fulfilled").length, MAX_RUNNING);
+    assert.equal(
+      starts.filter((result) => result.status === "fulfilled").length,
+      MAX_RUNNING,
+    );
     const rejected = starts.find((result) => result.status === "rejected");
     assert.ok(rejected && rejected.status === "rejected");
     assert.match(String(rejected.reason), /Max 8 background terminals/);
@@ -70,7 +93,8 @@ test("stdin is closed and stdout/stderr are captured separately", async () => {
   const manager = createTerminalManager({ shell });
   try {
     const started = await manager.start({
-      command: "if read line; then echo input:$line; else echo eof; fi; echo err >&2",
+      command:
+        "if read line; then echo input:$line; else echo eof; fi; echo err >&2",
       title: "stdin",
       cwd,
     });
@@ -96,8 +120,15 @@ test(
         title: "tree",
         cwd,
       });
-      assert.ok(await pollUntil(() => manager.get(started.id)?.stdout.text.includes("child:") === true));
-      const match = /child:(\d+)/.exec(manager.get(started.id)?.stdout.text ?? "");
+      assert.ok(
+        await pollUntil(
+          () =>
+            manager.get(started.id)?.stdout.text.includes("child:") === true,
+        ),
+      );
+      const match = /child:(\d+)/.exec(
+        manager.get(started.id)?.stdout.text ?? "",
+      );
       assert.ok(match);
       const descendantPid = Number(match[1]);
       assert.equal(processGone(descendantPid), false);

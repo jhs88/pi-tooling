@@ -21,9 +21,11 @@ async function persistOutput(operation: string, output: string) {
 export async function formatFirecrawlOutput(
   value: unknown,
   operation: string,
-  persist: PersistFirecrawlOutput = (output) => persistOutput(operation, output),
+  persist: PersistFirecrawlOutput = (output) =>
+    persistOutput(operation, output),
 ) {
-  const encoded = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  const encoded =
+    typeof value === "string" ? value : JSON.stringify(value, null, 2);
   const output = encoded ?? String(value);
   const truncation = truncateHead(output, {
     maxBytes: DEFAULT_MAX_BYTES,

@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, readFile, mkdir, mkdtemp, rm, stat, symlink, watch, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  readFile,
+  mkdir,
+  mkdtemp,
+  rm,
+  stat,
+  symlink,
+  watch,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import test from "node:test";
@@ -59,7 +69,10 @@ function deferred() {
   return { promise, resolve };
 }
 
-async function boundedBarrier(promise: Promise<void>, label: string): Promise<void> {
+async function boundedBarrier(
+  promise: Promise<void>,
+  label: string,
+): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => reject(new Error(`${label} timed out`)), 2_000);
@@ -84,10 +97,9 @@ function fakeFactory(
   const sessions: FakeSession[] = [];
   const factory: PiSessionFactory = async (input) => {
     inputs.push(input);
-    const sessionFile = input.sessionFile ?? path.join(
-      input.sessionsDir,
-      `session-${inputs.length}.jsonl`,
-    );
+    const sessionFile =
+      input.sessionFile ??
+      path.join(input.sessionsDir, `session-${inputs.length}.jsonl`);
     await mkdir(path.dirname(sessionFile), { recursive: true });
     if (!input.sessionFile) {
       await writeFile(sessionFile, '{"type":"session"}\n', { mode: 0o600 });
@@ -125,10 +137,9 @@ function branchingFactory(paths: Map<string, string[]>) {
   const inputs: PiSessionFactoryInput[] = [];
   const factory: PiSessionFactory = async (input) => {
     inputs.push(input);
-    const sessionFile = input.sessionFile ?? path.join(
-      input.sessionsDir,
-      `branch-${paths.size + 1}.jsonl`,
-    );
+    const sessionFile =
+      input.sessionFile ??
+      path.join(input.sessionsDir, `branch-${paths.size + 1}.jsonl`);
     await mkdir(path.dirname(sessionFile), { recursive: true });
     if (!input.sessionFile) {
       await writeFile(sessionFile, '{"type":"session"}\n', { mode: 0o600 });
@@ -165,7 +176,8 @@ test("default storage uses Pi's canonical cwd session directory", async () => {
     });
     await host.execute(executionInput("ctx-canonical", "hello"));
 
-    const safeCwd = `--${path.resolve(fixture.cwd)
+    const safeCwd = `--${path
+      .resolve(fixture.cwd)
       .replace(/^[/\\]/, "")
       .replace(/[/\\:]/g, "-")}--`;
     assert.equal(
@@ -200,10 +212,10 @@ test("a lazily persisted SDK session is mapped after its first assistant respons
     };
     const host = new PiSessionHost({ ...fixture, sessionFactory: factory });
 
-    assert.deepEqual(
-      await host.execute(executionInput("ctx-lazy", "hello")),
-      { state: "TASK_STATE_COMPLETED", text: "lazy-ok" },
-    );
+    assert.deepEqual(await host.execute(executionInput("ctx-lazy", "hello")), {
+      state: "TASK_STATE_COMPLETED",
+      text: "lazy-ok",
+    });
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
     assert.equal(registry.contexts["ctx-lazy"].sessionFile, sessionFile);
     await host.close();
@@ -242,12 +254,15 @@ test("session storage is owner-only even when the SDK uses permissive modes", as
 test("one A2A context reopens one persisted Pi session for each turn", async () => {
   await withFixture(async (fixture) => {
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
-    assert.deepEqual(
-      await host.execute(executionInput("ctx-reuse", "first")),
-      { state: "TASK_STATE_COMPLETED", text: "PI_REPLY:first" },
-    );
+    assert.deepEqual(await host.execute(executionInput("ctx-reuse", "first")), {
+      state: "TASK_STATE_COMPLETED",
+      text: "PI_REPLY:first",
+    });
     assert.deepEqual(
       await host.execute(executionInput("ctx-reuse", "second")),
       { state: "TASK_STATE_COMPLETED", text: "PI_REPLY:second" },
@@ -272,7 +287,10 @@ test("one A2A context reopens one persisted Pi session for each turn", async () 
 test("different A2A contexts create different Pi session files", async () => {
   await withFixture(async (fixture) => {
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     await host.execute(executionInput("ctx-one", "one"));
     await host.execute(executionInput("ctx-two", "two"));
@@ -286,12 +304,19 @@ test("different A2A contexts create different Pi session files", async () => {
 test("one registry preserves contexts from multiple canonical workspaces", async () => {
   await withFixture(async (fixture) => {
     const first = fakeFactory();
-    const firstHost = new PiSessionHost({ ...fixture, sessionFactory: first.factory });
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: first.factory,
+    });
     await firstHost.execute(executionInput("ctx-workspace-one", "one"));
     await firstHost.close();
 
     const secondCwd = path.join(fixture.root, "workspace-two");
-    const secondSessionsDir = path.join(fixture.agentDir, "a2a", "sessions-two");
+    const secondSessionsDir = path.join(
+      fixture.agentDir,
+      "a2a",
+      "sessions-two",
+    );
     await mkdir(secondCwd);
     const second = fakeFactory();
     const secondHost = new PiSessionHost({
@@ -339,12 +364,18 @@ test("concurrent workspace hosts do not lose each other's registry mappings", as
       },
     });
 
-    const firstRun = firstHost.execute(executionInput("ctx-concurrent-one", "one"));
+    const firstRun = firstHost.execute(
+      executionInput("ctx-concurrent-one", "one"),
+    );
     await firstEntered.promise;
-    const secondRun = secondHost.execute(executionInput("ctx-concurrent-two", "two"));
+    const secondRun = secondHost.execute(
+      executionInput("ctx-concurrent-two", "two"),
+    );
     const secondFactoryState = await Promise.race([
       secondEntered.promise.then(() => "entered" as const),
-      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 25)),
+      new Promise<"blocked">((resolve) =>
+        setTimeout(() => resolve("blocked"), 25),
+      ),
     ]);
     assert.equal(secondFactoryState, "blocked");
     firstRelease.resolve();
@@ -369,9 +400,13 @@ test("concurrent first-start hosts tolerate shared directory creation races", as
     );
 
     try {
-      await Promise.all(hosts.map((host, index) => host.execute(
-        executionInput(`ctx-first-start-${index}`, `message-${index}`),
-      )));
+      await Promise.all(
+        hosts.map((host, index) =>
+          host.execute(
+            executionInput(`ctx-first-start-${index}`, `message-${index}`),
+          ),
+        ),
+      );
       assert.equal(fake.inputs.length, hosts.length);
     } finally {
       await Promise.all(hosts.map((host) => host.close()));
@@ -393,11 +428,18 @@ test("concurrent creation of one context reopens the first canonical session", a
         return first.factory(input);
       },
     });
-    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: second.factory,
+    });
 
-    const firstRun = firstHost.execute(executionInput("ctx-concurrent-shared", "one"));
+    const firstRun = firstHost.execute(
+      executionInput("ctx-concurrent-shared", "one"),
+    );
     await firstEntered.promise;
-    const secondRun = secondHost.execute(executionInput("ctx-concurrent-shared", "two"));
+    const secondRun = secondHost.execute(
+      executionInput("ctx-concurrent-shared", "two"),
+    );
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(second.inputs.length, 0);
     firstRelease.resolve();
@@ -414,7 +456,10 @@ test("concurrent creation of one context reopens the first canonical session", a
 test("an already-mapped context remains available during unrelated initialization", async () => {
   await withFixture(async (fixture) => {
     const seed = fakeFactory();
-    const seedHost = new PiSessionHost({ ...fixture, sessionFactory: seed.factory });
+    const seedHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: seed.factory,
+    });
     await seedHost.execute(executionInput("ctx-already-mapped", "seed"));
     await seedHost.close();
 
@@ -448,7 +493,9 @@ test("an already-mapped context remains available during unrelated initializatio
     );
     const earlyOutcome = await Promise.race([
       mappedEntered.promise.then(() => "entered" as const),
-      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
+      new Promise<"blocked">((resolve) =>
+        setTimeout(() => resolve("blocked"), 30),
+      ),
     ]);
     blockerRelease.resolve();
     await Promise.all([blockerRun, mappedRun]);
@@ -462,7 +509,10 @@ test("an already-mapped context remains available during unrelated initializatio
 test("concurrent hosts serialize turns for one mapped context", async () => {
   await withFixture(async (fixture) => {
     const seed = fakeFactory();
-    const seedHost = new PiSessionHost({ ...fixture, sessionFactory: seed.factory });
+    const seedHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: seed.factory,
+    });
     await seedHost.execute(executionInput("ctx-mapped-turn", "seed"));
     await seedHost.close();
 
@@ -490,20 +540,33 @@ test("concurrent hosts serialize turns for one mapped context", async () => {
       onContextLockWait: secondWaiting.resolve,
     });
 
-    const firstRun = firstHost.execute(executionInput("ctx-mapped-turn", "first"));
+    const firstRun = firstHost.execute(
+      executionInput("ctx-mapped-turn", "first"),
+    );
     let secondRun: Promise<unknown> | undefined;
     let settlements: PromiseSettledResult<unknown>[];
     try {
       await boundedBarrier(firstEntered.promise, "first mapped turn entry");
-      secondRun = secondHost.execute(executionInput("ctx-mapped-turn", "second"));
-      await boundedBarrier(secondWaiting.promise, "second mapped turn lock wait");
+      secondRun = secondHost.execute(
+        executionInput("ctx-mapped-turn", "second"),
+      );
+      await boundedBarrier(
+        secondWaiting.promise,
+        "second mapped turn lock wait",
+      );
       assert.equal(second.inputs.length, 0);
     } finally {
       firstRelease.resolve();
-      settlements = await Promise.allSettled([firstRun, ...(secondRun ? [secondRun] : [])]);
+      settlements = await Promise.allSettled([
+        firstRun,
+        ...(secondRun ? [secondRun] : []),
+      ]);
       await Promise.all([firstHost.close(), secondHost.close()]);
     }
-    assert.equal(settlements.every(({ status }) => status === "fulfilled"), true);
+    assert.equal(
+      settlements.every(({ status }) => status === "fulfilled"),
+      true,
+    );
     assert.equal(second.inputs.length, 1);
   });
 });
@@ -514,22 +577,34 @@ test("alternating hosts keep mapped turns on one canonical conversation path", a
     const seed = branchingFactory(paths);
     const first = branchingFactory(paths);
     const second = branchingFactory(paths);
-    const seedHost = new PiSessionHost({ ...fixture, sessionFactory: seed.factory });
-    const firstHost = new PiSessionHost({ ...fixture, sessionFactory: first.factory });
-    const secondHost = new PiSessionHost({ ...fixture, sessionFactory: second.factory });
+    const seedHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: seed.factory,
+    });
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: first.factory,
+    });
+    const secondHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: second.factory,
+    });
 
     await seedHost.execute(executionInput("ctx-alternating", "seed"));
     await firstHost.execute(executionInput("ctx-alternating", "A1"));
     await secondHost.execute(executionInput("ctx-alternating", "B1"));
     await firstHost.execute(executionInput("ctx-alternating", "A2"));
 
-    const sessionFile = seed.inputs[0].sessionFile
-      ?? [...paths.keys()][0];
+    const sessionFile = seed.inputs[0].sessionFile ?? [...paths.keys()][0];
     assert.deepEqual(paths.get(sessionFile), ["seed", "A1", "B1", "A2"]);
     assert.equal(first.inputs.length, 2);
     assert.equal(first.inputs[0].sessionFile, sessionFile);
     assert.equal(first.inputs[1].sessionFile, sessionFile);
-    await Promise.all([seedHost.close(), firstHost.close(), secondHost.close()]);
+    await Promise.all([
+      seedHost.close(),
+      firstHost.close(),
+      secondHost.close(),
+    ]);
   });
 });
 
@@ -540,7 +615,10 @@ test("failed unmaterialized initialization evicts its cached session before retr
     const factory: PiSessionFactory = async (input) => {
       factoryCalls++;
       const factoryCall = factoryCalls;
-      const sessionFile = path.join(input.sessionsDir, `retry-${factoryCall}.jsonl`);
+      const sessionFile = path.join(
+        input.sessionsDir,
+        `retry-${factoryCall}.jsonl`,
+      );
       const messages: unknown[] = [];
       let promptCalls = 0;
       return {
@@ -559,7 +637,9 @@ test("failed unmaterialized initialization evicts its cached session before retr
           });
         },
         async abort() {},
-        async close() { closeCalls++; },
+        async close() {
+          closeCalls++;
+        },
       };
     };
     const host = new PiSessionHost({ ...fixture, sessionFactory: factory });
@@ -569,12 +649,17 @@ test("failed unmaterialized initialization evicts its cached session before retr
       /first lazy prompt failed/,
     );
     assert.equal(closeCalls, 1);
-    const result = await host.execute(executionInput("ctx-lazy-retry", "second"));
+    const result = await host.execute(
+      executionInput("ctx-lazy-retry", "second"),
+    );
 
     assert.equal(result.text, "retry succeeded");
     assert.equal(factoryCalls, 2);
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
-    assert.match(registry.contexts["ctx-lazy-retry"].sessionFile, /retry-2\.jsonl$/);
+    assert.match(
+      registry.contexts["ctx-lazy-retry"].sessionFile,
+      /retry-2\.jsonl$/,
+    );
     await host.close();
   });
 });
@@ -583,13 +668,18 @@ test("unmaterialized session cleanup finishes before a competing host acquires t
   await withFixture(async (fixture) => {
     const closeEntered = deferred();
     const closeRelease = deferred();
-    const firstSessionFile = path.join(fixture.sessionsDir, "unmaterialized.jsonl");
+    const firstSessionFile = path.join(
+      fixture.sessionsDir,
+      "unmaterialized.jsonl",
+    );
     const firstHost = new PiSessionHost({
       ...fixture,
       sessionFactory: async () => ({
         sessionFile: firstSessionFile,
         messages: [],
-        async prompt() { throw new Error("lazy prompt failed"); },
+        async prompt() {
+          throw new Error("lazy prompt failed");
+        },
         async abort() {},
         async close() {
           closeEntered.resolve();
@@ -619,7 +709,9 @@ test("unmaterialized session cleanup finishes before a competing host acquires t
     let firstError: unknown;
     let secondError: unknown;
     try {
-      lockHeldDuringCleanup = (await stat(`${fixture.registryPath}.lock`)).isDirectory();
+      lockHeldDuringCleanup = (
+        await stat(`${fixture.registryPath}.lock`)
+      ).isDirectory();
       const secondRun = secondHost.execute(
         executionInput("ctx-cleanup-order", "second"),
       );
@@ -629,7 +721,9 @@ test("unmaterialized session cleanup finishes before a competing host acquires t
       );
       earlyOutcome = await Promise.race([
         secondEntered.promise.then(() => "entered" as const),
-        new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
+        new Promise<"blocked">((resolve) =>
+          setTimeout(() => resolve("blocked"), 30),
+        ),
       ]);
       closeRelease.resolve();
       firstError = await firstOutcome;
@@ -656,7 +750,10 @@ test("registry persistence failure cleans the transient session before releasing
   await withFixture(async (fixture) => {
     const closeEntered = deferred();
     const closeRelease = deferred();
-    const failedSessionFile = path.join(fixture.sessionsDir, "registry-persistence-failure.jsonl");
+    const failedSessionFile = path.join(
+      fixture.sessionsDir,
+      "registry-persistence-failure.jsonl",
+    );
     let closeCalls = 0;
     const firstHost = new PiSessionHost({
       ...fixture,
@@ -667,8 +764,13 @@ test("registry persistence failure cleans the transient session before releasing
           messages,
           async prompt() {
             await mkdir(fixture.sessionsDir, { recursive: true });
-            await writeFile(failedSessionFile, '{"type":"session"}\n', { mode: 0o600 });
-            messages.push({ role: "assistant", content: [{ type: "text", text: "done" }] });
+            await writeFile(failedSessionFile, '{"type":"session"}\n', {
+              mode: 0o600,
+            });
+            messages.push({
+              role: "assistant",
+              content: [{ type: "text", text: "done" }],
+            });
             await mkdir(fixture.registryPath);
           },
           async abort() {},
@@ -690,12 +792,12 @@ test("registry persistence failure cleans the transient session before releasing
         return second.factory(input);
       },
     });
-    const firstOutcome = firstHost.execute(
-      executionInput("ctx-registry-persistence-failure", "first"),
-    ).then(
-      () => undefined,
-      (error) => error,
-    );
+    const firstOutcome = firstHost
+      .execute(executionInput("ctx-registry-persistence-failure", "first"))
+      .then(
+        () => undefined,
+        (error) => error,
+      );
     await closeEntered.promise;
 
     const secondRun = secondHost.execute(
@@ -703,14 +805,19 @@ test("registry persistence failure cleans the transient session before releasing
     );
     const earlyOutcome = await Promise.race([
       secondEntered.promise.then(() => "entered" as const),
-      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 30)),
+      new Promise<"blocked">((resolve) =>
+        setTimeout(() => resolve("blocked"), 30),
+      ),
     ]);
     closeRelease.resolve();
     const firstError = await firstOutcome;
     await secondRun;
 
     assert.equal(earlyOutcome, "blocked");
-    assert.match(String(firstError), /registry must be a regular non-symlink file/i);
+    assert.match(
+      String(firstError),
+      /registry must be a regular non-symlink file/i,
+    );
     assert.equal(closeCalls, 1);
     assert.equal(second.inputs.length, 1);
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
@@ -744,9 +851,13 @@ test("concurrent capacity is enforced before constructing a second session", asy
       sessionFactory: second.factory,
     });
 
-    const firstRun = firstHost.execute(executionInput("ctx-capacity-first", "one"));
+    const firstRun = firstHost.execute(
+      executionInput("ctx-capacity-first", "one"),
+    );
     await firstEntered.promise;
-    const secondRun = secondHost.execute(executionInput("ctx-capacity-second", "two"));
+    const secondRun = secondHost.execute(
+      executionInput("ctx-capacity-second", "two"),
+    );
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(second.inputs.length, 0);
     firstRelease.resolve();
@@ -801,7 +912,9 @@ test("abort while waiting for context initialization never constructs a session"
     abortController.abort(abortReason);
     const earlyOutcome = await Promise.race([
       secondOutcome,
-      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 50)),
+      new Promise<"pending">((resolve) =>
+        setTimeout(() => resolve("pending"), 50),
+      ),
     ]);
     firstRelease.resolve();
     await firstRun;
@@ -833,9 +946,13 @@ test("host close interrupts a pending context-initialization lock wait", async (
       sessionFactory: second.factory,
       onRegistryLockWait: secondWaiting.resolve,
     });
-    const firstRun = firstHost.execute(executionInput("ctx-close-owner", "one"));
+    const firstRun = firstHost.execute(
+      executionInput("ctx-close-owner", "one"),
+    );
     await firstEntered.promise;
-    const secondRun = secondHost.execute(executionInput("ctx-close-waiter", "two"));
+    const secondRun = secondHost.execute(
+      executionInput("ctx-close-waiter", "two"),
+    );
     let secondSettled = false;
     const secondOutcome = secondRun.then(
       () => {
@@ -852,7 +969,9 @@ test("host close interrupts a pending context-initialization lock wait", async (
 
     const closeOutcome = Promise.race([
       secondHost.close().then(() => "closed" as const),
-      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 50)),
+      new Promise<"pending">((resolve) =>
+        setTimeout(() => resolve("pending"), 50),
+      ),
     ]);
     const earlyOutcome = await closeOutcome;
     firstRelease.resolve();
@@ -867,7 +986,10 @@ test("host close interrupts a pending context-initialization lock wait", async (
 
 test("abort after session-directory setup never constructs a session", async () => {
   await withFixture(async (fixture) => {
-    await mkdir(path.dirname(fixture.sessionsDir), { recursive: true, mode: 0o700 });
+    await mkdir(path.dirname(fixture.sessionsDir), {
+      recursive: true,
+      mode: 0o700,
+    });
     const watchController = new AbortController();
     const events = watch(path.dirname(fixture.sessionsDir), {
       signal: watchController.signal,
@@ -878,11 +1000,12 @@ test("abort after session-directory setup never constructs a session", async () 
           if (event.filename === path.basename(fixture.sessionsDir)) return;
           if (
             event.filename === null &&
-            await stat(fixture.sessionsDir).then(
+            (await stat(fixture.sessionsDir).then(
               (entry) => entry.isDirectory(),
               () => false,
-            )
-          ) return;
+            ))
+          )
+            return;
         }
       } catch (error) {
         if (!watchController.signal.aborted) throw error;
@@ -912,7 +1035,10 @@ test("abort after session-directory setup never constructs a session", async () 
         sessionDirectoryCreated,
         new Promise<never>((_, reject) => {
           observationTimeout = setTimeout(
-            () => reject(new Error("timed out waiting for canonical session directory")),
+            () =>
+              reject(
+                new Error("timed out waiting for canonical session directory"),
+              ),
             2_000,
           );
         }),
@@ -934,7 +1060,10 @@ test("abort after session-directory setup never constructs a session", async () 
 test("a context cannot be rebound to a different workspace", async () => {
   await withFixture(async (fixture) => {
     const first = fakeFactory();
-    const firstHost = new PiSessionHost({ ...fixture, sessionFactory: first.factory });
+    const firstHost = new PiSessionHost({
+      ...fixture,
+      sessionFactory: first.factory,
+    });
     await firstHost.execute(executionInput("ctx-workspace-collision", "one"));
     await firstHost.close();
 
@@ -959,15 +1088,18 @@ test("a context cannot be rebound to a different workspace", async () => {
 test("context capacity is enforced before constructing or prompting a new session", async () => {
   await withFixture(async (fixture) => {
     await mkdir(path.dirname(fixture.registryPath), { recursive: true });
-    await writeFile(fixture.registryPath, `${JSON.stringify({
-      version: 1,
-      contexts: {
-        existing: {
-          cwd: fixture.cwd,
-          sessionFile: path.join(fixture.sessionsDir, "existing.jsonl"),
+    await writeFile(
+      fixture.registryPath,
+      `${JSON.stringify({
+        version: 1,
+        contexts: {
+          existing: {
+            cwd: fixture.cwd,
+            sessionFile: path.join(fixture.sessionsDir, "existing.jsonl"),
+          },
         },
-      },
-    })}\n`);
+      })}\n`,
+    );
     let factoryCalls = 0;
     const host = new PiSessionHost({
       ...fixture,
@@ -990,11 +1122,12 @@ test("context capacity is enforced before constructing or prompting a new sessio
 test("context capacity rejects values above the documented hard limit", async () => {
   await withFixture(async (fixture) => {
     assert.throws(
-      () => new PiSessionHost({
-        ...fixture,
-        maxContexts: 1_025,
-        sessionFactory: fakeFactory().factory,
-      }),
+      () =>
+        new PiSessionHost({
+          ...fixture,
+          maxContexts: 1_025,
+          sessionFactory: fakeFactory().factory,
+        }),
       /maxContexts must be a positive integer no greater than 1024/,
     );
   });
@@ -1029,7 +1162,10 @@ test("a restarted host reopens the mapped canonical Pi session", async () => {
 
     assert.equal(second.inputs.length, 1);
     assert.equal(second.inputs[0].sessionFile, sessionFile);
-    assert.equal((await stat(path.dirname(fixture.registryPath))).mode & 0o777, 0o700);
+    assert.equal(
+      (await stat(path.dirname(fixture.registryPath))).mode & 0o777,
+      0o700,
+    );
     assert.equal((await stat(fixture.registryPath)).mode & 0o777, 0o600);
     assert.equal((await stat(sessionsDir)).mode & 0o777, 0o700);
     assert.equal((await stat(sessionFile!)).mode & 0o777, 0o600);
@@ -1045,7 +1181,10 @@ test("a corrupt context registry fails closed without deleting sessions", async 
     await writeFile(existingSession, "keep\n", { mode: 0o600 });
     await writeFile(fixture.registryPath, "{not-json", { mode: 0o600 });
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     await assert.rejects(
       host.execute(executionInput("ctx-corrupt", "hello")),
@@ -1064,7 +1203,10 @@ test("a registry symlink fails closed", async () => {
     await writeFile(target, '{"version":1,"contexts":{}}\n', { mode: 0o600 });
     await symlink(target, fixture.registryPath);
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     await assert.rejects(
       host.execute(executionInput("ctx-symlink", "hello")),
@@ -1084,7 +1226,10 @@ test("a context turn-lock symlink fails closed", async () => {
     await mkdir(target);
     await symlink(target, lockPath);
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     await assert.rejects(
       host.execute(executionInput(contextId, "hello")),
@@ -1102,7 +1247,10 @@ test("a symlinked registry directory fails closed", async () => {
     await mkdir(external);
     await symlink(external, path.join(fixture.agentDir, "a2a"));
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     await assert.rejects(
       host.execute(executionInput("ctx-root-symlink", "hello")),
@@ -1118,7 +1266,10 @@ test("a symlinked Pi agent directory fails closed", async () => {
     await mkdir(realAgentDir);
     await symlink(realAgentDir, fixture.agentDir);
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     await assert.rejects(
       host.execute(executionInput("ctx-agent-root-symlink", "hello")),
@@ -1158,14 +1309,20 @@ test("a session symlink in the registry fails closed", async () => {
     const linked = path.join(sessionsDir, "linked.jsonl");
     await writeFile(target, "{}\n");
     await symlink(target, linked);
-    await writeFile(fixture.registryPath, JSON.stringify({
-      version: 1,
-      contexts: {
-        "ctx-session-symlink": { cwd: fixture.cwd, sessionFile: linked },
-      },
-    }));
+    await writeFile(
+      fixture.registryPath,
+      JSON.stringify({
+        version: 1,
+        contexts: {
+          "ctx-session-symlink": { cwd: fixture.cwd, sessionFile: linked },
+        },
+      }),
+    );
     const fake = fakeFactory();
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     await assert.rejects(
       host.execute(executionInput("ctx-session-symlink", "hello")),
@@ -1179,7 +1336,9 @@ test("host close waits for in-flight session creation and closes the late sessio
   await withFixture(async (fixture) => {
     const factoryEntered = deferred();
     let releaseFactory!: () => void;
-    const factoryReady = new Promise<void>((resolve) => { releaseFactory = resolve; });
+    const factoryReady = new Promise<void>((resolve) => {
+      releaseFactory = resolve;
+    });
     let promptCalls = 0;
     let closeCalls = 0;
     const sessionFile = path.join(fixture.sessionsDir, "late.jsonl");
@@ -1190,9 +1349,13 @@ test("host close waits for in-flight session creation and closes the late sessio
       return {
         sessionFile,
         messages: [],
-        async prompt() { promptCalls++; },
+        async prompt() {
+          promptCalls++;
+        },
         async abort() {},
-        async close() { closeCalls++; },
+        async close() {
+          closeCalls++;
+        },
       };
     };
     const host = new PiSessionHost({ ...fixture, sessionFactory: factory });
@@ -1211,12 +1374,16 @@ test("host close waits for in-flight session creation and closes the late sessio
 test("host close aborts an active prompt and preserves its canonical mapping", async () => {
   await withFixture(async (fixture) => {
     let promptStarted!: () => void;
-    const started = new Promise<void>((resolve) => { promptStarted = resolve; });
+    const started = new Promise<void>((resolve) => {
+      promptStarted = resolve;
+    });
     let releasePrompt!: () => void;
-    const released = new Promise<void>((resolve) => { releasePrompt = resolve; });
+    const released = new Promise<void>((resolve) => {
+      releasePrompt = resolve;
+    });
     const fake = fakeFactory();
     fake.factory = async (input) => {
-      const session = await fakeFactory().factory(input) as FakeSession;
+      const session = (await fakeFactory().factory(input)) as FakeSession;
       session.prompt = async () => {
         promptStarted();
         await released;
@@ -1228,7 +1395,10 @@ test("host close aborts an active prompt and preserves its canonical mapping", a
       fake.sessions.push(session);
       return session;
     };
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
     const execution = host.execute(executionInput("ctx-close-prompt", "wait"));
     await started;
 
@@ -1249,7 +1419,9 @@ test("an abort during session setup never starts the Pi prompt", async () => {
   await withFixture(async (fixture) => {
     const factoryEntered = deferred();
     let releaseFactory!: () => void;
-    const factoryReady = new Promise<void>((resolve) => { releaseFactory = resolve; });
+    const factoryReady = new Promise<void>((resolve) => {
+      releaseFactory = resolve;
+    });
     let promptCalls = 0;
     let abortCalls = 0;
     const sessionFile = path.join(fixture.sessionsDir, "setup-abort.jsonl");
@@ -1261,14 +1433,20 @@ test("an abort during session setup never starts the Pi prompt", async () => {
       return {
         sessionFile,
         messages: [],
-        async prompt() { promptCalls++; },
-        async abort() { abortCalls++; },
+        async prompt() {
+          promptCalls++;
+        },
+        async abort() {
+          abortCalls++;
+        },
         async close() {},
       };
     };
     const host = new PiSessionHost({ ...fixture, sessionFactory: factory });
     const controller = new AbortController();
-    const execution = host.execute(executionInput("ctx-setup-abort", "wait", controller.signal));
+    const execution = host.execute(
+      executionInput("ctx-setup-abort", "wait", controller.signal),
+    );
 
     await factoryEntered.promise;
     controller.abort(new Error("cancel during setup"));
@@ -1292,7 +1470,7 @@ test("an aborted A2A turn aborts the Pi session once and keeps cleanup idempoten
     });
     const fake = fakeFactory();
     fake.factory = async (input) => {
-      const session = await fakeFactory().factory(input) as FakeSession;
+      const session = (await fakeFactory().factory(input)) as FakeSession;
       session.prompt = async () => {
         promptStarted();
         await released;
@@ -1304,9 +1482,14 @@ test("an aborted A2A turn aborts the Pi session once and keeps cleanup idempoten
       fake.sessions.push(session);
       return session;
     };
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
     const controller = new AbortController();
-    const execution = host.execute(executionInput("ctx-abort", "wait", controller.signal));
+    const execution = host.execute(
+      executionInput("ctx-abort", "wait", controller.signal),
+    );
     await started;
 
     controller.abort(new Error("caller canceled"));
@@ -1368,7 +1551,9 @@ test("a materialized session remains mapped when prompt execution fails", async 
       return {
         sessionFile,
         messages: [],
-        async prompt() { throw new Error("prompt failed"); },
+        async prompt() {
+          throw new Error("prompt failed");
+        },
         async abort() {},
         async close() {},
       };
@@ -1380,7 +1565,10 @@ test("a materialized session remains mapped when prompt execution fails", async 
       /prompt failed/,
     );
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
-    assert.equal(registry.contexts["ctx-prompt-failed"].sessionFile, sessionFile);
+    assert.equal(
+      registry.contexts["ctx-prompt-failed"].sessionFile,
+      sessionFile,
+    );
     await host.close();
   });
 });
@@ -1406,15 +1594,23 @@ test("a materialized session remains mapped when no assistant text is produced",
       /no assistant text/,
     );
     const registry = JSON.parse(await readFile(fixture.registryPath, "utf8"));
-    assert.equal(registry.contexts["ctx-no-assistant"].sessionFile, sessionFile);
+    assert.equal(
+      registry.contexts["ctx-no-assistant"].sessionFile,
+      sessionFile,
+    );
     await host.close();
   });
 });
 
 test("the input-required marker maps to the A2A input-required state", async () => {
   await withFixture(async (fixture) => {
-    const fake = fakeFactory(() => "[INPUT_REQUIRED] Which branch should I use?");
-    const host = new PiSessionHost({ ...fixture, sessionFactory: fake.factory });
+    const fake = fakeFactory(
+      () => "[INPUT_REQUIRED] Which branch should I use?",
+    );
+    const host = new PiSessionHost({
+      ...fixture,
+      sessionFactory: fake.factory,
+    });
 
     assert.deepEqual(
       await host.execute(executionInput("ctx-input", "implement it")),

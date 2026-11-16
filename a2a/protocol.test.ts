@@ -19,11 +19,13 @@ test("buildAgentCard advertises only the implemented JSON-RPC v1 interface", () 
     pushNotifications: false,
     extendedAgentCard: false,
   });
-  assert.deepEqual(card.supportedInterfaces, [{
-    protocolBinding: "JSONRPC",
-    protocolVersion: "1.0",
-    url: interfaceUrl,
-  }]);
+  assert.deepEqual(card.supportedInterfaces, [
+    {
+      protocolBinding: "JSONRPC",
+      protocolVersion: "1.0",
+      url: interfaceUrl,
+    },
+  ]);
   assert.deepEqual(card.security, [{ bearer: [] }]);
   assert.equal(card.securitySchemes.bearer.type, "http");
   assert.equal(card.securitySchemes.bearer.scheme, "bearer");
@@ -49,19 +51,27 @@ test("extractUserText accepts Hermes v1 member-presence text parts", () => {
 });
 
 test("extractUserText rejects non-user roles and empty text", () => {
-  assert.throws(() => extractUserText({
-    messageId: "m",
-    contextId: "ctx",
-    role: "ROLE_AGENT",
-    parts: [{ text: "no" }],
-  }), /ROLE_USER/);
+  assert.throws(
+    () =>
+      extractUserText({
+        messageId: "m",
+        contextId: "ctx",
+        role: "ROLE_AGENT",
+        parts: [{ text: "no" }],
+      }),
+    /ROLE_USER/,
+  );
 
-  assert.throws(() => extractUserText({
-    messageId: "m",
-    contextId: "ctx",
-    role: "ROLE_USER",
-    parts: [{ data: {} }],
-  }), /text part/);
+  assert.throws(
+    () =>
+      extractUserText({
+        messageId: "m",
+        contextId: "ctx",
+        role: "ROLE_USER",
+        parts: [{ data: {} }],
+      }),
+    /text part/,
+  );
 });
 
 test("taskFromExecution builds the wrapped A2A v1 completed task shape", () => {

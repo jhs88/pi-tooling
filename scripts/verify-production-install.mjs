@@ -1,5 +1,12 @@
 import { execFile as execFileCallback, spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -24,7 +31,9 @@ try {
     { cwd: packageRoot },
   );
   const packResult = JSON.parse(packed.stdout);
-  const packedFilename = (Array.isArray(packResult) ? packResult[0] : Object.values(packResult)[0])?.filename;
+  const packedFilename = (
+    Array.isArray(packResult) ? packResult[0] : Object.values(packResult)[0]
+  )?.filename;
   if (typeof packedFilename !== "string") {
     throw new Error("npm pack did not return a package filename");
   }
@@ -62,33 +71,50 @@ try {
   assertPeer(manifest.peerDependencies, "@earendil-works/pi-coding-agent");
 
   try {
-    await access(path.join(
-      installRoot,
-      "node_modules",
-      "@earendil-works",
-      "pi-coding-agent",
-    ));
-    throw new Error("production fixture unexpectedly installed the Pi host peer");
+    await access(
+      path.join(
+        installRoot,
+        "node_modules",
+        "@earendil-works",
+        "pi-coding-agent",
+      ),
+    );
+    throw new Error(
+      "production fixture unexpectedly installed the Pi host peer",
+    );
   } catch (error) {
-    if (error instanceof Error && error.message.includes("unexpectedly")) throw error;
+    if (error instanceof Error && error.message.includes("unexpectedly"))
+      throw error;
   }
 
   // Load every packaged extension with the real host and no installed host peers.
   // The headless entrypoint alone does not exercise file-search or Firecrawl imports.
-  const { DefaultResourceLoader } = await import(pathToFileURL(path.join(piHostPackage, "dist/index.js")));
+  const { DefaultResourceLoader } = await import(
+    pathToFileURL(path.join(piHostPackage, "dist/index.js"))
+  );
   const loader = new DefaultResourceLoader({
     cwd: installRoot,
     agentDir: path.join(root, "extension-agent"),
     additionalExtensionPaths: [path.join(installedPackage, "index.ts")],
-    noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
   });
   await loader.reload();
   const loaded = loader.getExtensions();
   if (loaded.errors.length > 0 || loaded.extensions.length !== 1) {
-    throw new Error(`Production extension failed to load: ${JSON.stringify(loaded.errors)}`);
+    throw new Error(
+      `Production extension failed to load: ${JSON.stringify(loaded.errors)}`,
+    );
   }
 
-  const executable = path.join(installRoot, "node_modules", ".bin", "pi-a2a-server");
+  const executable = path.join(
+    installRoot,
+    "node_modules",
+    ".bin",
+    "pi-a2a-server",
+  );
   const checked = await execFile(executable, ["--check"], {
     cwd: installRoot,
     env: {
@@ -136,7 +162,9 @@ async function smokeHeadlessServer(executable, hostPackage, fixtureRoot) {
       { headers: { authorization: `Bearer ${token}` } },
     );
     if (!response.ok) {
-      throw new Error(`production headless Agent Card returned HTTP ${response.status}`);
+      throw new Error(
+        `production headless Agent Card returned HTTP ${response.status}`,
+      );
     }
   } finally {
     if (child.exitCode === null) child.kill("SIGTERM");
@@ -151,11 +179,14 @@ async function availablePort() {
     server.listen(0, "127.0.0.1", resolve);
   });
   const address = server.address();
-  const port = typeof address === "object" && address ? address.port : undefined;
-  await new Promise((resolve, reject) => server.close((error) => {
-    if (error) reject(error);
-    else resolve();
-  }));
+  const port =
+    typeof address === "object" && address ? address.port : undefined;
+  await new Promise((resolve, reject) =>
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    }),
+  );
   if (!port) throw new Error("unable to reserve a production smoke-test port");
   return port;
 }
@@ -165,7 +196,10 @@ function waitForReady(child) {
     let stdout = "";
     let stderr = "";
     const timeout = setTimeout(
-      () => reject(new Error(`production headless server did not start: ${stderr}`)),
+      () =>
+        reject(
+          new Error(`production headless server did not start: ${stderr}`),
+        ),
       15_000,
     );
     child.stdout.on("data", (chunk) => {
@@ -195,7 +229,10 @@ function waitForExit(child) {
     child.once("exit", (code, signal) => {
       clearTimeout(timeout);
       if (code === 0 && signal === null) resolve();
-      else reject(new Error(`production headless server exited ${code ?? signal}`));
+      else
+        reject(
+          new Error(`production headless server exited ${code ?? signal}`),
+        );
     });
   });
 }

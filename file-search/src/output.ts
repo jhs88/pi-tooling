@@ -1,8 +1,8 @@
 // Adapted from davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e.
 /**
- * Shared output shaping for the fd and rg tools: standard pi truncation
- * (2000 lines / 50KB) with the full output persisted to a temp file when
- * anything is cut off.
+ * Shared output shaping for the fd and rg tools: standard pi truncation (2000
+ * lines / 50KB) with the full output persisted to a temp file when anything is
+ * cut off.
  */
 
 import { mkdtemp, writeFile } from "node:fs/promises";

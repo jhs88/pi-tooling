@@ -1,13 +1,13 @@
 // Adapted from davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e for Pi 0.80.10.
 /**
- * file-search — first-class `fd` and `rg` tools for pi.
+ * File-search — first-class `fd` and `rg` tools for pi.
  *
- * On session start the extension resolves a usable binary for each tool:
- * a normally installed system binary is preferred (silently), then an
- * existing fallback in this repo's `bin/` directory (silently), and only
- * when neither exists is an official release downloaded into `bin/` — the
- * single case that shows a UI notification. Tools await that initialization
- * before executing, and report a clear error if it failed.
+ * On session start the extension resolves a usable binary for each tool: a
+ * normally installed system binary is preferred (silently), then an existing
+ * fallback in this repo's `bin/` directory (silently), and only when neither
+ * exists is an official release downloaded into `bin/` — the single case that
+ * shows a UI notification. Tools await that initialization before executing,
+ * and report a clear error if it failed.
  */
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -387,9 +387,16 @@ function fdParameters() {
       Type.String({ description: FD_PARAMETER_DESCRIPTIONS.path }),
     ),
     type: Type.Optional(
-      Type.Union([Type.Literal("file"), Type.Literal("directory"), Type.Literal("symlink")], {
-        description: FD_PARAMETER_DESCRIPTIONS.type,
-      }),
+      Type.Union(
+        [
+          Type.Literal("file"),
+          Type.Literal("directory"),
+          Type.Literal("symlink"),
+        ],
+        {
+          description: FD_PARAMETER_DESCRIPTIONS.type,
+        },
+      ),
     ),
     extension: Type.Optional(
       Type.String({ description: FD_PARAMETER_DESCRIPTIONS.extension }),

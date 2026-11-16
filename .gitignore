@@ -1,7 +1,4 @@
 node_modules/
 .scratch/
-.cachebro/
-.pi-workflows/
-.pi-background/
 file-search/bin/
 *.log

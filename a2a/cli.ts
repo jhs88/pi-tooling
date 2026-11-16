@@ -31,12 +31,15 @@ if (args.includes("--help") || args.includes("-h")) {
     await loadHeadlessServer();
     process.stdout.write("Pi A2A headless runtime is ready\n");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "runtime check failed";
+    const message =
+      error instanceof Error ? error.message : "runtime check failed";
     process.stderr.write(`pi-a2a-server: ${message}\n`);
     process.exitCode = 1;
   }
 } else if (args.length > 0) {
-  process.stderr.write(`${HELP}\nError: pi-a2a-server does not accept positional arguments.\n`);
+  process.stderr.write(
+    `${HELP}\nError: pi-a2a-server does not accept positional arguments.\n`,
+  );
   process.exitCode = 2;
 } else {
   const shutdown = new AbortController();
@@ -61,7 +64,8 @@ if (args.includes("--help") || args.includes("-h")) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "A2A server failed";
+    const message =
+      error instanceof Error ? error.message : "A2A server failed";
     process.stderr.write(`pi-a2a-server: ${message}\n`);
     process.exitCode = 1;
   } finally {

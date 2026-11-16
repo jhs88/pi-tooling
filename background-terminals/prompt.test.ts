@@ -22,7 +22,13 @@ const snapshot: TerminalSnapshot = {
     spillBytes: 50,
     spillTruncated: true,
   },
-  stderr: { text: "", totalBytes: 0, truncatedBytes: 0, spillBytes: 0, spillTruncated: false },
+  stderr: {
+    text: "",
+    totalBytes: 0,
+    truncatedBytes: 0,
+    spillBytes: 0,
+    spillTruncated: false,
+  },
 };
 
 test("retention wording never calls the retained /ps tail a full log", () => {
@@ -30,5 +36,8 @@ test("retention wording never calls the retained /ps tail a full log", () => {
   assert.match(note, /\/ps shows only the retained tail/);
   assert.match(note, /spill retained first 50 B/);
   assert.doesNotMatch(note, /full (?:log|output).*\/ps/i);
-  assert.doesNotMatch(buildStatusResult(snapshot), /full (?:log|output).*\/ps/i);
+  assert.doesNotMatch(
+    buildStatusResult(snapshot),
+    /full (?:log|output).*\/ps/i,
+  );
 });

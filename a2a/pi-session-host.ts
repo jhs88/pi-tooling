@@ -100,9 +100,10 @@ function assistantResult(messages: readonly unknown[]): A2AExecutionResult {
       .trim();
     const stopReason = message.stopReason;
     if (stopReason === "error" || stopReason === "aborted") {
-      const errorMessage = typeof message.errorMessage === "string"
-        ? message.errorMessage.trim()
-        : "Pi execution failed";
+      const errorMessage =
+        typeof message.errorMessage === "string"
+          ? message.errorMessage.trim()
+          : "Pi execution failed";
       return {
         state: "TASK_STATE_FAILED",
         text: text || errorMessage,
@@ -112,7 +113,8 @@ function assistantResult(messages: readonly unknown[]): A2AExecutionResult {
     if (text.startsWith(INPUT_REQUIRED_MARKER)) {
       return {
         state: "TASK_STATE_INPUT_REQUIRED",
-        text: text.slice(INPUT_REQUIRED_MARKER.length).trim() ||
+        text:
+          text.slice(INPUT_REQUIRED_MARKER.length).trim() ||
           "Pi requires additional input",
       };
     }
@@ -129,7 +131,8 @@ function parseRegistry(raw: string): ContextRegistry {
     throw new Error("A2A context registry is not valid JSON", { cause: error });
   }
   if (
-    !isRecord(parsed) || parsed.version !== REGISTRY_VERSION ||
+    !isRecord(parsed) ||
+    parsed.version !== REGISTRY_VERSION ||
     !isRecord(parsed.contexts)
   ) {
     throw new Error("A2A context registry has an invalid shape");
@@ -146,7 +149,9 @@ function parseRegistry(raw: string): ContextRegistry {
       typeof value.sessionFile !== "string" ||
       !path.isAbsolute(value.sessionFile)
     ) {
-      throw new Error("A2A context registry contains an invalid session mapping");
+      throw new Error(
+        "A2A context registry contains an invalid session mapping",
+      );
     }
     contexts[contextId] = {
       cwd: value.cwd,
@@ -157,7 +162,8 @@ function parseRegistry(raw: string): ContextRegistry {
 }
 
 function canonicalPiSessionDirectory(cwd: string, agentDir: string): string {
-  const safeCwd = `--${path.resolve(cwd)
+  const safeCwd = `--${path
+    .resolve(cwd)
     .replace(/^[/\\]/, "")
     .replace(/[/\\:]/g, "-")}--`;
   return path.join(path.resolve(agentDir), "sessions", safeCwd);
@@ -174,7 +180,10 @@ async function ensurePrivateStorageRoot(root: string): Promise<void> {
   const resolvedRoot = path.resolve(root);
   const parsed = path.parse(resolvedRoot);
   let current = parsed.root;
-  for (const segment of resolvedRoot.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+  for (const segment of resolvedRoot
+    .slice(parsed.root.length)
+    .split(path.sep)
+    .filter(Boolean)) {
     current = path.join(current, segment);
     let metadata;
     try {
@@ -184,17 +193,26 @@ async function ensurePrivateStorageRoot(root: string): Promise<void> {
       metadata = await createPrivateDirectoryAfterMissing(current);
     }
     if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
-      throw new Error("A2A agent directory path must not contain symbolic links");
+      throw new Error(
+        "A2A agent directory path must not contain symbolic links",
+      );
     }
   }
   await chmod(resolvedRoot, 0o700);
 }
 
-async function ensurePrivateDirectory(root: string, directory: string): Promise<void> {
+async function ensurePrivateDirectory(
+  root: string,
+  directory: string,
+): Promise<void> {
   const resolvedRoot = path.resolve(root);
   const resolvedDirectory = path.resolve(directory);
   const relative = path.relative(resolvedRoot, resolvedDirectory);
-  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (
+    relative === "" ||
+    relative.startsWith("..") ||
+    path.isAbsolute(relative)
+  ) {
     throw new Error("A2A storage directory escapes the Pi agent directory");
   }
 
@@ -210,7 +228,9 @@ async function ensurePrivateDirectory(root: string, directory: string): Promise<
       metadata = await createPrivateDirectoryAfterMissing(current);
     }
     if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
-      throw new Error("A2A storage directories must not contain symbolic links");
+      throw new Error(
+        "A2A storage directories must not contain symbolic links",
+      );
     }
     await chmod(current, 0o700);
   }
@@ -267,11 +287,14 @@ async function acquirePrivateDirectoryLock(
     } catch (error) {
       if (!isRecord(error) || error.code !== "EEXIST") throw error;
       const metadata = await lstat(lockPath).catch((metadataError) => {
-        if (isRecord(metadataError) && metadataError.code === "ENOENT") return undefined;
+        if (isRecord(metadataError) && metadataError.code === "ENOENT")
+          return undefined;
         throw metadataError;
       });
       if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
-        throw new Error(`${lockDescription} must be a private directory`, { cause: error });
+        throw new Error(`${lockDescription} must be a private directory`, {
+          cause: error,
+        });
       }
       if (!reportedWait) {
         reportedWait = true;
@@ -300,14 +323,18 @@ async function acquirePrivateDirectoryLock(
   let releasePromise: Promise<void> | undefined;
   const release = () => {
     releasePromise ??= (async () => {
-      const metadata = await lstat(lockPath, { bigint: true }).catch((error) => {
-        throw new Error(`${lockDescription} disappeared unexpectedly`, { cause: error });
-      });
+      const metadata = await lstat(lockPath, { bigint: true }).catch(
+        (error) => {
+          throw new Error(`${lockDescription} disappeared unexpectedly`, {
+            cause: error,
+          });
+        },
+      );
       if (
-        !metadata.isDirectory()
-        || metadata.isSymbolicLink()
-        || metadata.dev !== lockIdentity.dev
-        || metadata.ino !== lockIdentity.ino
+        !metadata.isDirectory() ||
+        metadata.isSymbolicLink() ||
+        metadata.dev !== lockIdentity.dev ||
+        metadata.ino !== lockIdentity.ino
       ) {
         throw new Error(`${lockDescription} changed unexpectedly`);
       }
@@ -384,7 +411,9 @@ async function validateSessionFile(
     });
   });
   if (!candidateMetadata.isFile()) {
-    throw new Error("Mapped Pi session path must be a regular non-symlink file");
+    throw new Error(
+      "Mapped Pi session path must be a regular non-symlink file",
+    );
   }
   const [realSessionsDir, realSessionFile] = await Promise.all([
     realpath(sessionsDir),
@@ -395,11 +424,18 @@ async function validateSessionFile(
     });
   });
   const relative = path.relative(realSessionsDir, realSessionFile);
-  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Mapped Pi session file escapes the canonical Pi session directory");
+  if (
+    relative === "" ||
+    relative.startsWith("..") ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(
+      "Mapped Pi session file escapes the canonical Pi session directory",
+    );
   }
   const metadata = await lstat(realSessionFile);
-  if (!metadata.isFile()) throw new Error("Mapped Pi session path is not a file");
+  if (!metadata.isFile())
+    throw new Error("Mapped Pi session path is not a file");
   return realSessionFile;
 }
 
@@ -413,7 +449,11 @@ function validateSessionPathCandidate(
   const root = path.resolve(sessionsDir);
   const candidate = path.resolve(sessionFile);
   const relative = path.relative(root, candidate);
-  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (
+    relative === "" ||
+    relative.startsWith("..") ||
+    path.isAbsolute(relative)
+  ) {
     throw new Error("Pi session path escapes the A2A session directory");
   }
   return candidate;
@@ -490,13 +530,14 @@ export class PiSessionHost {
       options.registryPath ?? path.join(this.#agentDir, "a2a", "contexts.json"),
     );
     this.#sessionsDir = path.resolve(
-      options.sessionsDir ?? canonicalPiSessionDirectory(this.#cwd, this.#agentDir),
+      options.sessionsDir ??
+        canonicalPiSessionDirectory(this.#cwd, this.#agentDir),
     );
     this.#maxContexts = options.maxContexts ?? DEFAULT_MAX_CONTEXTS;
     if (
-      !Number.isSafeInteger(this.#maxContexts)
-      || this.#maxContexts <= 0
-      || this.#maxContexts > MAX_A2A_CONTEXTS
+      !Number.isSafeInteger(this.#maxContexts) ||
+      this.#maxContexts <= 0 ||
+      this.#maxContexts > MAX_A2A_CONTEXTS
     ) {
       throw new Error(
         `maxContexts must be a positive integer no greater than ${MAX_A2A_CONTEXTS}`,
@@ -516,7 +557,9 @@ export class PiSessionHost {
     if (input.signal.aborted) throw abortError(input.signal);
     this.#active = true;
     let resolveActive!: () => void;
-    const activeDone = new Promise<void>((resolve) => { resolveActive = resolve; });
+    const activeDone = new Promise<void>((resolve) => {
+      resolveActive = resolve;
+    });
     this.#activeDone = activeDone;
 
     let session: HostedPiSession | undefined;
@@ -524,7 +567,10 @@ export class PiSessionHost {
     let abortPromise: Promise<void> | undefined;
     let releaseTurn: RegistryLockRelease | undefined;
     try {
-      const setupSignal = AbortSignal.any([input.signal, this.#closeController.signal]);
+      const setupSignal = AbortSignal.any([
+        input.signal,
+        this.#closeController.signal,
+      ]);
       releaseTurn = await acquireContextTurnLock(
         this.#agentDir,
         this.#registryPath,
@@ -627,22 +673,28 @@ export class PiSessionHost {
       throw new Error("Unable to read A2A context registry", { cause: error });
     }
     if (!metadata.isFile()) {
-      throw new Error("A2A context registry must be a regular non-symlink file");
+      throw new Error(
+        "A2A context registry must be a regular non-symlink file",
+      );
     }
     await chmod(this.#registryPath, 0o600);
     const raw = await readFile(this.#registryPath, "utf8").catch((error) => {
       throw new Error("Unable to read A2A context registry", { cause: error });
     });
     const registry = parseRegistry(raw);
-    const workspaceContextCount = Object.values(registry.contexts)
-      .filter((entry) => entry.cwd === this.#cwd).length;
+    const workspaceContextCount = Object.values(registry.contexts).filter(
+      (entry) => entry.cwd === this.#cwd,
+    ).length;
     if (workspaceContextCount > this.#maxContexts) {
       throw new Error("A2A context registry exceeds the configured limit");
     }
     return registry;
   }
 
-  async #sessionFor(contextId: string, signal: AbortSignal): Promise<HostedPiSession> {
+  async #sessionFor(
+    contextId: string,
+    signal: AbortSignal,
+  ): Promise<HostedPiSession> {
     if (signal.aborted) throw abortError(signal);
     const cached = this.#sessions.get(contextId);
     if (cached) return cached;
@@ -709,7 +761,9 @@ export class PiSessionHost {
           session.sessionFile ?? "",
         );
         if (mapped && candidateFile !== sessionFile) {
-          throw new Error("Reopened Pi session path does not match its registry mapping");
+          throw new Error(
+            "Reopened Pi session path does not match its registry mapping",
+          );
         }
         this.#sessions.set(contextId, session);
         if (mapped) this.#mappedSessionFiles.set(contextId, sessionFile!);
@@ -741,7 +795,9 @@ export class PiSessionHost {
     const mappedFile = this.#mappedSessionFiles.get(contextId);
     if (mappedFile) {
       if (mappedFile !== canonicalFile) {
-        throw new Error("A2A context is already mapped to a different Pi session");
+        throw new Error(
+          "A2A context is already mapped to a different Pi session",
+        );
       }
       return;
     }
@@ -753,12 +809,15 @@ export class PiSessionHost {
           throw new Error("A2A context belongs to a different workspace");
         }
         if (existing.sessionFile !== canonicalFile) {
-          throw new Error("A2A context is already mapped to a different Pi session");
+          throw new Error(
+            "A2A context is already mapped to a different Pi session",
+          );
         }
         return;
       }
-      const workspaceContextCount = Object.values(registry.contexts)
-        .filter((entry) => entry.cwd === this.#cwd).length;
+      const workspaceContextCount = Object.values(registry.contexts).filter(
+        (entry) => entry.cwd === this.#cwd,
+      ).length;
       if (workspaceContextCount >= this.#maxContexts) {
         throw new Error("A2A context capacity reached");
       }

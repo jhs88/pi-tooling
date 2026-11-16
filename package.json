@@ -26,7 +26,7 @@
     ]
   },
   "scripts": {
-    "check": "node node_modules/typescript-native/bin/tsc --noEmit -p .",
+    "check": "node node_modules/typescript7/bin/tsc --noEmit -p .",
     "test": "node --test --experimental-strip-types a2a/*.test.ts ask-user/*.test.ts background-terminals/*.test.ts file-search/*.test.ts firecrawl/*.test.ts integration/*.test.ts shared/*.test.ts subagents/*.test.ts subagents/*.test.mjs",
     "verify": "npm run lint && npm run format:check && npm run check && npm test",
     "verify:production": "node scripts/verify-production-install.mjs",
@@ -60,10 +60,11 @@
     "eslint-config-prettier": "10.1.8",
     "globals": "17.14.0",
     "prettier": "3.10.1",
+    "prettier-plugin-jsdoc": "1.8.1",
     "typebox": "1.4.7",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2",
-    "typescript-native": "npm:typescript@7.0.2"
+    "typescript7": "npm:typescript@7.0.2"
   },
   "overrides": {
     "@typescript-eslint/typescript-estree": {

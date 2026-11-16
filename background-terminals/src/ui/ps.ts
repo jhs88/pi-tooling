@@ -1,7 +1,7 @@
 // Adapted from davis7dotsh/my-pi-setup@797eaf6d6f178759cf7aabde927ef15c91346e7e; /ps renders retained tails only.
 /**
- * /ps UI — two-stage full-screen overlay over the synchronous
- * TerminalManager:
+ * /ps UI — two-stage full-screen overlay over the synchronous TerminalManager:
+ *
  * - TerminalDashboard: list of all tracked terminals (select, kill, open).
  * - TerminalDetailView: read-only inspector for one terminal — metadata,
  *   stdout/stderr toggle, scrolling, live tail. No input surface: background
@@ -21,8 +21,10 @@ import { formatElapsed, formatExit, type TerminalSnapshot } from "../domain.ts";
 import type { TerminalManager } from "../manager.ts";
 import { createOutputLineCache } from "./output-view.ts";
 
-/** One-line-safe rendering of model-provided text (titles, commands): a
- * newline or control char inside a fixed-height row desyncs the renderer. */
+/**
+ * One-line-safe rendering of model-provided text (titles, commands): a newline
+ * or control char inside a fixed-height row desyncs the renderer.
+ */
 function oneLine(text: string) {
   return sanitizeTerminalLine(text);
 }

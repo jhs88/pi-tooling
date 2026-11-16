@@ -1,7 +1,10 @@
 /** Compact, defensive context-window utilization formatting for child agents. */
 
 export interface ContextUtilization {
-  /** Current conversation context occupancy; null while it is unknown after compaction. */
+  /**
+   * Current conversation context occupancy; null while it is unknown after
+   * compaction.
+   */
   tokens?: number | null;
   /** Capacity of the model currently serving the conversation. */
   contextWindow?: number | null;
@@ -36,8 +39,8 @@ export function formatCompactTokens(count: number) {
 /**
  * Render `%/capacity`. If occupancy is temporarily unknown (notably directly
  * after compaction), retain the useful model capacity as `?%/capacity`. If no
- * valid capacity is available, omit the statistic because no percentage can
- * be computed.
+ * valid capacity is available, omit the statistic because no percentage can be
+ * computed.
  */
 export function formatContextUtilization(usage: ContextUtilization) {
   const capacity = usableCapacity(usage.contextWindow);

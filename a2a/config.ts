@@ -29,7 +29,9 @@ function positiveInteger(
   if (value === undefined || value === "") return fallback;
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > maximum) {
-    throw new Error(`${name} must be a positive integer no greater than ${maximum}`);
+    throw new Error(
+      `${name} must be a positive integer no greater than ${maximum}`,
+    );
   }
   return parsed;
 }
@@ -44,7 +46,9 @@ export function loadA2AServerConfig(
 
   const requestedHost = env.PI_A2A_HOST ?? "127.0.0.1";
   if (!LOOPBACK_HOSTS.has(requestedHost as A2AServerConfig["host"])) {
-    throw new Error("PI_A2A_HOST must be a loopback host in the first milestone");
+    throw new Error(
+      "PI_A2A_HOST must be a loopback host in the first milestone",
+    );
   }
 
   return {
