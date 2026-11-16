@@ -2,10 +2,10 @@
 /**
  * Pure CLI argument construction for the fd and rg tools.
  *
- * Everything here is synchronous and side-effect free so the exact argv
- * passed to pi.exec can be asserted in tests. Patterns are always placed
- * after a `--` separator so user-controlled input can never be parsed as a
- * flag, and paths are normalized (leading `@`, `~` expansion) before use.
+ * Everything here is synchronous and side-effect free so the exact argv passed
+ * to pi.exec can be asserted in tests. Patterns are always placed after a `--`
+ * separator so user-controlled input can never be parsed as a flag, and paths
+ * are normalized (leading `@`, `~` expansion) before use.
  */
 
 import { homedir } from "node:os";

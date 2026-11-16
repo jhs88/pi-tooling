@@ -11,7 +11,10 @@ import {
   type OutputView,
   type TerminalSnapshot,
 } from "./domain.ts";
-import { DEFAULT_SPILL_PER_SESSION, DEFAULT_SPILL_PER_STREAM } from "./output.ts";
+import {
+  DEFAULT_SPILL_PER_SESSION,
+  DEFAULT_SPILL_PER_STREAM,
+} from "./output.ts";
 import { MAX_RUNNING } from "./manager.ts";
 
 export const STATUS_STDOUT_MAX = 16 * 1024;
@@ -25,7 +28,11 @@ export function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(bytes % (1024 * 1024) === 0 ? 0 : 1)} MiB`;
 }
 
-function tailByBytes(text: string, maxBytes: number, maxLines: number): { content: string; truncated: boolean } {
+function tailByBytes(
+  text: string,
+  maxBytes: number,
+  maxLines: number,
+): { content: string; truncated: boolean } {
   const lines = text.split("\n");
   let content = lines.slice(Math.max(0, lines.length - maxLines)).join("\n");
   let truncated = lines.length > maxLines;
@@ -41,7 +48,10 @@ function tailByBytes(text: string, maxBytes: number, maxLines: number): { conten
 
 function safeModelText(text: string): string {
   return text
-    .replace(/(?:\u001b\]|\u009d)(?:[^\u0007\u001b\u009c]|\u001b(?!\\))*(?:\u0007|\u001b\\|\u009c)/g, "")
+    .replace(
+      /(?:\u001b\]|\u009d)(?:[^\u0007\u001b\u009c]|\u001b(?!\\))*(?:\u0007|\u001b\\|\u009c)/g,
+      "",
+    )
     .replace(/(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/g, "")
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
 }
@@ -72,9 +82,11 @@ export const BG_START_PROMPT_GUIDELINES = [
 ];
 
 export const BG_START_PARAMETER_DESCRIPTIONS = {
-  command: "Command to run through the explicit background shell. It receives immediate EOF on stdin.",
+  command:
+    "Command to run through the explicit background shell. It receives immediate EOF on stdin.",
   title: "Short human-readable title for listings and /ps",
-  workingDir: "Working directory, relative to the current session cwd unless absolute",
+  workingDir:
+    "Working directory, relative to the current session cwd unless absolute",
 };
 export const BG_STATUS_PARAMETER_DESCRIPTIONS = {
   id: "Background terminal id returned by bg_start or bg_list",
@@ -82,8 +94,10 @@ export const BG_STATUS_PARAMETER_DESCRIPTIONS = {
 export const BG_KILL_PARAMETER_DESCRIPTIONS = {
   ids: "One or more background terminal ids to stop",
 };
-export const BG_STATUS_TOOL_DESCRIPTION = "Return one terminal's current state and bounded retained output tails.";
-export const BG_LIST_TOOL_DESCRIPTION = "List all tracked running and settled background terminals.";
+export const BG_STATUS_TOOL_DESCRIPTION =
+  "Return one terminal's current state and bounded retained output tails.";
+export const BG_LIST_TOOL_DESCRIPTION =
+  "List all tracked running and settled background terminals.";
 export const BG_KILL_TOOL_DESCRIPTION =
   "Stop process trees. POSIX sends SIGTERM to the process group then SIGKILL after a grace period; Windows uses best-effort taskkill /T then /F.";
 
@@ -91,7 +105,12 @@ export function describeTerminal(snapshot: TerminalSnapshot): string {
   return `${snapshot.id} [${snapshot.status}] "${snapshot.title}" (pid ${snapshot.pid ?? "?"}, ${formatElapsed(snapshot)}, ${formatExit(snapshot)}, ${snapshot.cwd}, stdout ${formatSize(snapshot.stdout.totalBytes)}, stderr ${formatSize(snapshot.stderr.totalBytes)})`;
 }
 
-function outputSection(label: string, view: OutputView, maxBytes: number, maxLines: number): string {
+function outputSection(
+  label: string,
+  view: OutputView,
+  maxBytes: number,
+  maxLines: number,
+): string {
   if (view.totalBytes === 0) return `${label}: (empty)`;
   const tail = tailByBytes(safeModelText(view.text), maxBytes, maxLines);
   let text = `${label}:\n${tail.content}`;
@@ -114,18 +133,26 @@ export function buildStatusResult(snapshot: TerminalSnapshot): string {
 }
 
 export function buildTerminalResultMessage(snapshot: TerminalSnapshot): string {
-  const outcome = snapshot.status === "killed" ? "was killed" : `exited (${formatExit(snapshot)})`;
+  const outcome =
+    snapshot.status === "killed"
+      ? "was killed"
+      : `exited (${formatExit(snapshot)})`;
   let text = `Background terminal ${snapshot.id} "${snapshot.title}" ${outcome} after ${formatElapsed(snapshot)}.`;
   if (snapshot.errorText) text += `\nError: ${snapshot.errorText}`;
   text += `\n\n${outputSection("stdout", snapshot.stdout, RESULT_STDOUT_MAX, 40)}`;
-  if (snapshot.stderr.totalBytes > 0) text += `\n\n${outputSection("stderr", snapshot.stderr, RESULT_STDERR_MAX, 20)}`;
+  if (snapshot.stderr.totalBytes > 0)
+    text += `\n\n${outputSection("stderr", snapshot.stderr, RESULT_STDERR_MAX, 20)}`;
   return text;
 }
 
 export function buildKillReport(results: ReadonlyArray<KillResult>): string {
-  return results.map((result) => {
-    if (result.killed) return `Killed ${result.id} "${result.title}" (${result.exit}).`;
-    if (result.wasRunning) return `${result.id} "${result.title}" exited before termination landed (${result.exit}).`;
-    return `${result.id} "${result.title}" was already ${result.status} (${result.exit}).`;
-  }).join("\n");
+  return results
+    .map((result) => {
+      if (result.killed)
+        return `Killed ${result.id} "${result.title}" (${result.exit}).`;
+      if (result.wasRunning)
+        return `${result.id} "${result.title}" exited before termination landed (${result.exit}).`;
+      return `${result.id} "${result.title}" was already ${result.status} (${result.exit}).`;
+    })
+    .join("\n");
 }

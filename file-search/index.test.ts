@@ -37,7 +37,9 @@ function makeEnv(options: {
     probe: (command) =>
       Effect.sync(() => {
         probes.push(command);
-        return (options.available ?? []).includes(command) || installed.has(command);
+        return (
+          (options.available ?? []).includes(command) || installed.has(command)
+        );
       }),
     install: (asset, destination) => {
       if (options.installShouldFail) {
@@ -117,7 +119,9 @@ test("official fallback assets are HTTPS and checksum-pinned", () => {
 test("fallback install errors remain useful and typed", async () => {
   const env = makeEnv({ installShouldFail: true });
   await assert.rejects(
-    Effect.runPromise(resolveBinary(TOOL_SPECS.rg, "/agent/bin", linuxX64, env)),
+    Effect.runPromise(
+      resolveBinary(TOOL_SPECS.rg, "/agent/bin", linuxX64, env),
+    ),
     (error: unknown) =>
       error instanceof InstallError && error.message === "network down",
   );
@@ -139,7 +143,10 @@ test("search process execution observes cancellation", async () => {
 });
 
 test("oversized model output is bounded and the full result is persisted", async () => {
-  const output = Array.from({ length: 3000 }, (_, index) => `file-${index}.ts`).join("\n");
+  const output = Array.from(
+    { length: 3000 },
+    (_, index) => `file-${index}.ts`,
+  ).join("\n");
   let persisted: string | undefined;
   const formatted = await formatOutput(output, {
     tempPrefix: "pi-file-search-test-",

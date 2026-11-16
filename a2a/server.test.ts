@@ -10,7 +10,9 @@ import {
   startOnEphemeralPort,
 } from "./fixtures.ts";
 
-function createServer(overrides: Partial<ConstructorParameters<typeof PiA2AServer>[0]> = {}) {
+function createServer(
+  overrides: Partial<ConstructorParameters<typeof PiA2AServer>[0]> = {},
+) {
   return new PiA2AServer({
     host: "127.0.0.1",
     port: 0,
@@ -27,10 +29,14 @@ function createServer(overrides: Partial<ConstructorParameters<typeof PiA2AServe
 }
 
 test("configured server factory requires the environment token", () => {
-  assert.throws(() => createConfiguredPiA2AServer(
-    async () => ({ state: "TASK_STATE_COMPLETED", text: "unused" }),
-    {},
-  ), /PI_A2A_BEARER_TOKEN/);
+  assert.throws(
+    () =>
+      createConfiguredPiA2AServer(
+        async () => ({ state: "TASK_STATE_COMPLETED", text: "unused" }),
+        {},
+      ),
+    /PI_A2A_BEARER_TOKEN/,
+  );
 });
 
 test("server constructor rejects non-loopback hosts and bodies over one MiB", () => {
@@ -71,26 +77,39 @@ test("server startup waits for an in-flight stop", async () => {
 
 test("a final stop is ordered after a restart queued during shutdown", async (t) => {
   let startedResolve!: () => void;
-  const started = new Promise<void>((resolve) => { startedResolve = resolve; });
+  const started = new Promise<void>((resolve) => {
+    startedResolve = resolve;
+  });
   let abortingResolve!: () => void;
-  const aborting = new Promise<void>((resolve) => { abortingResolve = resolve; });
+  const aborting = new Promise<void>((resolve) => {
+    abortingResolve = resolve;
+  });
   let releaseCleanup!: () => void;
-  const cleanup = new Promise<void>((resolve) => { releaseCleanup = resolve; });
+  const cleanup = new Promise<void>((resolve) => {
+    releaseCleanup = resolve;
+  });
   const server = createServer({
     execute: async ({ signal }) => {
       startedResolve();
       await new Promise<void>((resolve) => {
-        signal.addEventListener("abort", () => {
-          abortingResolve();
-          void cleanup.then(resolve);
-        }, { once: true });
+        signal.addEventListener(
+          "abort",
+          () => {
+            abortingResolve();
+            void cleanup.then(resolve);
+          },
+          { once: true },
+        );
       });
       return { state: "TASK_STATE_CANCELED", text: "canceled" };
     },
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
-  const request = postJson(url, sendMessageRequest("hold", "ctx-lifecycle-order"));
+  const request = postJson(
+    url,
+    sendMessageRequest("hold", "ctx-lifecycle-order"),
+  );
   await started;
 
   const stopping = server.stop();
@@ -118,7 +137,9 @@ test("server exposes an authenticated canonical Agent Card without wildcard CORS
   );
   assert.equal(wrongToken.status, 401);
 
-  const response = await authenticatedFetch(`${url}/.well-known/agent-card.json`);
+  const response = await authenticatedFetch(
+    `${url}/.well-known/agent-card.json`,
+  );
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), null);
 
@@ -156,11 +177,14 @@ test("SendMessage forwards Hermes text and returns a wrapped completed task", as
   assert.equal(calls.length, 1);
   assert.equal((calls[0] as { message: string }).message, "hello");
   assert.equal((calls[0] as { contextId: string }).contextId, "ctx-123");
-  assert.ok((calls[0] as { signal: AbortSignal }).signal instanceof AbortSignal);
+  assert.ok(
+    (calls[0] as { signal: AbortSignal }).signal instanceof AbortSignal,
+  );
 });
 
 test("SendMessage continues an input-required task by taskId", async (t) => {
-  const calls: Array<{ taskId: string; contextId: string; message: string }> = [];
+  const calls: Array<{ taskId: string; contextId: string; message: string }> =
+    [];
   const server = createServer({
     execute: async (input) => {
       calls.push(input);
@@ -171,7 +195,10 @@ test("SendMessage continues an input-required task by taskId", async (t) => {
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
-  const firstResponse = await postJson(url, sendMessageRequest("start", "ctx-task"));
+  const firstResponse = await postJson(
+    url,
+    sendMessageRequest("start", "ctx-task"),
+  );
   const firstTask = (await firstResponse.json()).result.task;
 
   const continuation = await postJson(url, {
@@ -191,14 +218,17 @@ test("SendMessage continues an input-required task by taskId", async (t) => {
   assert.equal(continuedTask.id, firstTask.id);
   assert.equal(continuedTask.contextId, "ctx-task");
   assert.equal(continuedTask.status.state, "TASK_STATE_COMPLETED");
-  assert.deepEqual(calls.map(({ taskId, contextId, message }) => ({
-    taskId,
-    contextId,
-    message,
-  })), [
-    { taskId: firstTask.id, contextId: "ctx-task", message: "start" },
-    { taskId: firstTask.id, contextId: "ctx-task", message: "more" },
-  ]);
+  assert.deepEqual(
+    calls.map(({ taskId, contextId, message }) => ({
+      taskId,
+      contextId,
+      message,
+    })),
+    [
+      { taskId: firstTask.id, contextId: "ctx-task", message: "start" },
+      { taskId: firstTask.id, contextId: "ctx-task", message: "more" },
+    ],
+  );
 
   const missing = await postJson(url, {
     jsonrpc: "2.0",
@@ -239,7 +269,11 @@ test("SendMessage continues an unambiguous input-required task by contextId", as
 
   const continuation = await postJson(
     url,
-    sendMessageRequest("clarification", firstTask.contextId, "context-follow-up"),
+    sendMessageRequest(
+      "clarification",
+      firstTask.contextId,
+      "context-follow-up",
+    ),
   );
   const continuedTask = (await continuation.json()).result.task;
   assert.equal(continuation.status, 200);
@@ -252,7 +286,10 @@ test("SendMessage rejects continuation of a terminal task", async (t) => {
   const server = createServer();
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
-  const firstResponse = await postJson(url, sendMessageRequest("start", "ctx-terminal-send"));
+  const firstResponse = await postJson(
+    url,
+    sendMessageRequest("start", "ctx-terminal-send"),
+  );
   const firstTask = (await firstResponse.json()).result.task;
 
   const continuation = await postJson(url, {
@@ -274,11 +311,17 @@ test("SendMessage rejects continuation of a terminal task", async (t) => {
 
 test("SendMessage rejects a taskId paired with a different contextId", async (t) => {
   const server = createServer({
-    execute: async () => ({ state: "TASK_STATE_INPUT_REQUIRED", text: "need more" }),
+    execute: async () => ({
+      state: "TASK_STATE_INPUT_REQUIRED",
+      text: "need more",
+    }),
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
-  const firstResponse = await postJson(url, sendMessageRequest("start", "ctx-original"));
+  const firstResponse = await postJson(
+    url,
+    sendMessageRequest("start", "ctx-original"),
+  );
   const firstTask = (await firstResponse.json()).result.task;
 
   const continuation = await postJson(url, {
@@ -336,7 +379,10 @@ test("SendMessage preserves an auth-required execution outcome", async (t) => {
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
-  const response = await postJson(url, sendMessageRequest("authenticate", "ctx-auth"));
+  const response = await postJson(
+    url,
+    sendMessageRequest("authenticate", "ctx-auth"),
+  );
   const task = (await response.json()).result.task;
   assert.equal(task.status.state, "TASK_STATE_AUTH_REQUIRED");
   assert.equal(task.status.message.taskId, task.id);
@@ -440,16 +486,19 @@ test("server returns 413 as soon as a streaming body crosses the limit", async (
   const url = new URL(await startOnEphemeralPort(server));
   let request!: http.ClientRequest;
   const response = new Promise<number>((resolve, reject) => {
-    request = http.request({
-      hostname: url.hostname,
-      port: url.port,
-      path: "/",
-      method: "POST",
-      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
-    }, (result) => {
-      resolve(result.statusCode ?? 0);
-      result.resume();
-    });
+    request = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: "/",
+        method: "POST",
+        headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+      },
+      (result) => {
+        resolve(result.statusCode ?? 0);
+        result.resume();
+      },
+    );
     request.on("error", reject);
     request.write("x".repeat(129));
   });
@@ -457,7 +506,9 @@ test("server returns 413 as soon as a streaming body crosses the limit", async (
 
   const outcome = await Promise.race([
     response,
-    new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
+    new Promise<"pending">((resolve) =>
+      setTimeout(() => resolve("pending"), 100),
+    ),
   ]);
   request.destroy();
   assert.equal(outcome, 413);
@@ -486,13 +537,17 @@ test("server shutdown aborts an admitted authenticated partial body", async () =
       else socket.once("connect", resolve);
     });
   });
-  request.write(JSON.stringify(sendMessageRequest("shutdown", "ctx-shutdown")).slice(0, -1));
+  request.write(
+    JSON.stringify(sendMessageRequest("shutdown", "ctx-shutdown")).slice(0, -1),
+  );
   await connected;
 
   const stopping = server.stop();
   const outcome = await Promise.race([
     stopping.then(() => "stopped" as const),
-    new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
+    new Promise<"pending">((resolve) =>
+      setTimeout(() => resolve("pending"), 100),
+    ),
   ]);
   request.destroy();
   await stopping;
@@ -506,7 +561,10 @@ test("GetTask and ListTasks expose bounded completed task state", async (t) => {
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
-  const sent = await postJson(url, sendMessageRequest("one", "ctx-one", "send-1"));
+  const sent = await postJson(
+    url,
+    sendMessageRequest("one", "ctx-one", "send-1"),
+  );
   const task = (await sent.json()).result.task;
 
   const getResponse = await postJson(url, {
@@ -625,11 +683,17 @@ test("bounded task storage preserves an input-required task for continuation", a
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
-  const first = await postJson(url, sendMessageRequest("one", "ctx-one", "send-1"));
+  const first = await postJson(
+    url,
+    sendMessageRequest("one", "ctx-one", "send-1"),
+  );
   const firstTask = (await first.json()).result.task;
   assert.equal(firstTask.status.state, "TASK_STATE_INPUT_REQUIRED");
 
-  const second = await postJson(url, sendMessageRequest("two", "ctx-two", "send-2"));
+  const second = await postJson(
+    url,
+    sendMessageRequest("two", "ctx-two", "send-2"),
+  );
   assert.equal((await second.json()).error.code, -32050);
   assert.equal(executions, 1);
 
@@ -654,23 +718,33 @@ test("bounded task storage preserves an input-required task for continuation", a
 
 test("a second active SendMessage fails clearly with HTTP 429", async (t) => {
   let startedResolve!: (taskId: string) => void;
-  const started = new Promise<string>((resolve) => { startedResolve = resolve; });
+  const started = new Promise<string>((resolve) => {
+    startedResolve = resolve;
+  });
   let executions = 0;
   const server = createServer({
-    execute: ({ taskId, signal }) => new Promise((resolve) => {
-      executions++;
-      startedResolve(taskId);
-      signal.addEventListener("abort", () => {
-        resolve({ state: "TASK_STATE_CANCELED", text: "canceled" });
-      }, { once: true });
-    }),
+    execute: ({ taskId, signal }) =>
+      new Promise((resolve) => {
+        executions++;
+        startedResolve(taskId);
+        signal.addEventListener(
+          "abort",
+          () => {
+            resolve({ state: "TASK_STATE_CANCELED", text: "canceled" });
+          },
+          { once: true },
+        );
+      }),
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
   const first = postJson(url, sendMessageRequest("first", "ctx-first"));
   const taskId = await started;
-  const second = await postJson(url, sendMessageRequest("second", "ctx-second", "send-2"));
+  const second = await postJson(
+    url,
+    sendMessageRequest("second", "ctx-second", "send-2"),
+  );
   assert.equal(second.status, 429);
   assert.equal((await second.json()).error.code, -32051);
   assert.equal(executions, 1);
@@ -686,11 +760,17 @@ test("a second active SendMessage fails clearly with HTTP 429", async (t) => {
 
 test("the server stays busy until canceled executor cleanup settles", async (t) => {
   let firstStarted!: () => void;
-  const started = new Promise<void>((resolve) => { firstStarted = resolve; });
+  const started = new Promise<void>((resolve) => {
+    firstStarted = resolve;
+  });
   let cleanupStarted!: () => void;
-  const aborting = new Promise<void>((resolve) => { cleanupStarted = resolve; });
+  const aborting = new Promise<void>((resolve) => {
+    cleanupStarted = resolve;
+  });
   let releaseCleanup!: () => void;
-  const cleanup = new Promise<void>((resolve) => { releaseCleanup = resolve; });
+  const cleanup = new Promise<void>((resolve) => {
+    releaseCleanup = resolve;
+  });
   let calls = 0;
   const server = createServer({
     execute: async ({ signal }) => {
@@ -698,10 +778,14 @@ test("the server stays busy until canceled executor cleanup settles", async (t) 
       if (calls > 1) return { state: "TASK_STATE_COMPLETED", text: "next" };
       firstStarted();
       await new Promise<void>((resolve) => {
-        signal.addEventListener("abort", () => {
-          cleanupStarted();
-          void cleanup.then(resolve);
-        }, { once: true });
+        signal.addEventListener(
+          "abort",
+          () => {
+            cleanupStarted();
+            void cleanup.then(resolve);
+          },
+          { once: true },
+        );
       });
       return { state: "TASK_STATE_CANCELED", text: "stopped" };
     },
@@ -735,23 +819,36 @@ test("the server stays busy until canceled executor cleanup settles", async (t) 
   assert.equal(duringCleanup.status, 429);
 
   await new Promise<void>((resolve) => setImmediate(resolve));
-  const afterCleanup = await postJson(url, sendMessageRequest("next", "ctx-next"));
+  const afterCleanup = await postJson(
+    url,
+    sendMessageRequest("next", "ctx-next"),
+  );
   assert.equal(afterCleanup.status, 200);
-  assert.equal((await afterCleanup.json()).result.task.status.state, "TASK_STATE_COMPLETED");
+  assert.equal(
+    (await afterCleanup.json()).result.task.status.state,
+    "TASK_STATE_COMPLETED",
+  );
 });
 
 test("CancelTask aborts one active executor and settles the original task as canceled", async (t) => {
   let startedResolve!: (taskId: string) => void;
-  const started = new Promise<string>((resolve) => { startedResolve = resolve; });
+  const started = new Promise<string>((resolve) => {
+    startedResolve = resolve;
+  });
   let aborts = 0;
   const server = createServer({
-    execute: ({ taskId, signal }) => new Promise((resolve) => {
-      startedResolve(taskId);
-      signal.addEventListener("abort", () => {
-        aborts++;
-        resolve({ state: "TASK_STATE_CANCELED", text: "canceled" });
-      }, { once: true });
-    }),
+    execute: ({ taskId, signal }) =>
+      new Promise((resolve) => {
+        startedResolve(taskId);
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborts++;
+            resolve({ state: "TASK_STATE_CANCELED", text: "canceled" });
+          },
+          { once: true },
+        );
+      }),
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
@@ -774,21 +871,27 @@ test("CancelTask aborts one active executor and settles the original task as can
 
 test("CancelTask settles the original request when the executor ignores abort", async (t) => {
   let startedResolve!: (taskId: string) => void;
-  const started = new Promise<string>((resolve) => { startedResolve = resolve; });
+  const started = new Promise<string>((resolve) => {
+    startedResolve = resolve;
+  });
   let release!: (result: {
     state: "TASK_STATE_COMPLETED";
     text: string;
   }) => void;
   const server = createServer({
-    execute: ({ taskId }) => new Promise((resolve) => {
-      startedResolve(taskId);
-      release = resolve;
-    }),
+    execute: ({ taskId }) =>
+      new Promise((resolve) => {
+        startedResolve(taskId);
+        release = resolve;
+      }),
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
-  const request = postJson(url, sendMessageRequest("wait", "ctx-cancel-ignores"));
+  const request = postJson(
+    url,
+    sendMessageRequest("wait", "ctx-cancel-ignores"),
+  );
   const taskId = await started;
   await postJson(url, {
     jsonrpc: "2.0",
@@ -811,21 +914,32 @@ test("CancelTask settles the original request when the executor ignores abort", 
 
 test("disconnecting a SendMessage client aborts its executor", async (t) => {
   let started!: () => void;
-  const executionStarted = new Promise<void>((resolve) => { started = resolve; });
+  const executionStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
   let aborted!: () => void;
-  const executionAborted = new Promise<void>((resolve) => { aborted = resolve; });
+  const executionAborted = new Promise<void>((resolve) => {
+    aborted = resolve;
+  });
   const server = createServer({
-    execute: ({ signal }) => new Promise((resolve) => {
-      started();
-      signal.addEventListener("abort", () => {
-        aborted();
-        resolve({ state: "TASK_STATE_CANCELED", text: "disconnected" });
-      }, { once: true });
-    }),
+    execute: ({ signal }) =>
+      new Promise((resolve) => {
+        started();
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborted();
+            resolve({ state: "TASK_STATE_CANCELED", text: "disconnected" });
+          },
+          { once: true },
+        );
+      }),
   });
   t.after(() => server.stop());
   const url = new URL(await startOnEphemeralPort(server));
-  const body = JSON.stringify(sendMessageRequest("disconnect", "ctx-disconnect"));
+  const body = JSON.stringify(
+    sendMessageRequest("disconnect", "ctx-disconnect"),
+  );
   const request = http.request({
     hostname: url.hostname,
     port: url.port,
@@ -844,7 +958,9 @@ test("disconnecting a SendMessage client aborts its executor", async (t) => {
 
   const outcome = await Promise.race([
     executionAborted.then(() => "aborted" as const),
-    new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
+    new Promise<"pending">((resolve) =>
+      setTimeout(() => resolve("pending"), 100),
+    ),
   ]);
   assert.equal(outcome, "aborted");
 });
@@ -853,17 +969,25 @@ test("execution timeout aborts the executor once and returns a failed task", asy
   let aborts = 0;
   const server = createServer({
     executionTimeoutMs: 10,
-    execute: ({ signal }) => new Promise((resolve) => {
-      signal.addEventListener("abort", () => {
-        aborts++;
-        resolve({ state: "TASK_STATE_CANCELED", text: "executor stopped" });
-      }, { once: true });
-    }),
+    execute: ({ signal }) =>
+      new Promise((resolve) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborts++;
+            resolve({ state: "TASK_STATE_CANCELED", text: "executor stopped" });
+          },
+          { once: true },
+        );
+      }),
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
-  const response = await postJson(url, sendMessageRequest("time out", "ctx-timeout"));
+  const response = await postJson(
+    url,
+    sendMessageRequest("time out", "ctx-timeout"),
+  );
   const task = (await response.json()).result.task;
   assert.equal(task.status.state, "TASK_STATE_FAILED");
   assert.equal(task.status.message.parts[0].text, "execution timed out");
@@ -877,12 +1001,18 @@ test("execution timeout settles even when the executor ignores abort", async (t)
   }) => void;
   const server = createServer({
     executionTimeoutMs: 10,
-    execute: () => new Promise((resolve) => { release = resolve; }),
+    execute: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
   });
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
-  const request = postJson(url, sendMessageRequest("ignore abort", "ctx-uncooperative"));
+  const request = postJson(
+    url,
+    sendMessageRequest("ignore abort", "ctx-uncooperative"),
+  );
   const outcome = await Promise.race([
     request.then(() => "settled" as const),
     new Promise<"pending">((resolve) => {
@@ -907,7 +1037,10 @@ test("executor cannot return a nonterminal task state", async (t) => {
   t.after(() => server.stop());
   const url = await startOnEphemeralPort(server);
 
-  const response = await postJson(url, sendMessageRequest("finish", "ctx-nonterminal"));
+  const response = await postJson(
+    url,
+    sendMessageRequest("finish", "ctx-nonterminal"),
+  );
   const task = (await response.json()).result.task;
   assert.equal(task.status.state, "TASK_STATE_FAILED");
   assert.match(task.status.message.parts[0].text, /terminal task state/);

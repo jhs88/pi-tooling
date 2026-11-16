@@ -6,9 +6,12 @@ export function buildOutputLines(text: string, width: number): string[] {
   const lines: string[] = [];
   for (const raw of text.split("\n")) {
     const segments = raw.split("\r");
-    const segment = segments.at(-1) || [...segments].reverse().find(Boolean) || "";
+    const segment =
+      segments.at(-1) || [...segments].reverse().find(Boolean) || "";
     const clean = sanitizeTerminalText(segment);
-    lines.push(...(clean ? wrapTextWithAnsi(clean, Math.max(10, width)) : [""]));
+    lines.push(
+      ...(clean ? wrapTextWithAnsi(clean, Math.max(10, width)) : [""]),
+    );
   }
   if (lines.at(-1) === "") lines.pop();
   return lines;

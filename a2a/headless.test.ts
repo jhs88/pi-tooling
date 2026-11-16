@@ -67,18 +67,21 @@ function fixture() {
 test("the headless runner serves until aborted and then closes cleanly", async () => {
   const app = fixture();
   const controller = new AbortController();
-  const running = runHeadlessA2AServer({
-    cwd: "/fixture/workspace",
-    agentDir: "/fixture/agent",
-    env: {
-      PI_A2A_BEARER_TOKEN: "fixture-token",
-      PI_A2A_MAX_CONTEXTS: "512",
+  const running = runHeadlessA2AServer(
+    {
+      cwd: "/fixture/workspace",
+      agentDir: "/fixture/agent",
+      env: {
+        PI_A2A_BEARER_TOKEN: "fixture-token",
+        PI_A2A_MAX_CONTEXTS: "512",
+      },
+      signal: controller.signal,
+      onReady(message) {
+        app.ready.push(message);
+      },
     },
-    signal: controller.signal,
-    onReady(message) {
-      app.ready.push(message);
-    },
-  }, app.dependencies);
+    app.dependencies,
+  );
 
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(app.counts.starts, 1);

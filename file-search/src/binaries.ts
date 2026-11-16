@@ -3,10 +3,11 @@
  * Startup resolution of the fd and rg executables.
  *
  * Resolution order (per tool, first usable wins):
- *   1. A normally installed system binary (`fd`/`fdfind`, `rg`) — used silently.
- *   2. An existing fallback in this repository's `bin/` directory — used silently.
- *   3. A fresh download of an official release into `bin/` — the only case that
- *      should surface a UI notification.
+ *
+ * 1. A normally installed system binary (`fd`/`fdfind`, `rg`) — used silently.
+ * 2. An existing fallback in this repository's `bin/` directory — used silently.
+ * 3. A fresh download of an official release into `bin/` — the only case that
+ *    should surface a UI notification.
  *
  * The decision logic is an Effect over a small injectable environment
  * (`BinaryEnv`) so tests can drive it without touching the filesystem or the

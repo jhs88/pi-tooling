@@ -32,7 +32,11 @@ test("secret redaction covers inherited values and credential-shaped output", ()
 test("spill files are private and bounded by per-stream and session quotas", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "bt-output-test-"));
   try {
-    const session = new SpillSession({ root, maxStreamBytes: 8, maxSessionBytes: 12 });
+    const session = new SpillSession({
+      root,
+      maxStreamBytes: 8,
+      maxSessionBytes: 12,
+    });
     const stdout = session.createWriter("bt-1", "stdout");
     const stderr = session.createWriter("bt-1", "stderr");
     stdout.write("abcdefghijk");
@@ -68,7 +72,11 @@ test("creating a spill session removes only stale session directories", () => {
     fs.utimesSync(stale, new Date(now - 10_000), new Date(now - 10_000));
     fs.utimesSync(fresh, new Date(now), new Date(now));
 
-    const session = new SpillSession({ root, staleAfterMs: 5_000, now: () => now });
+    const session = new SpillSession({
+      root,
+      staleAfterMs: 5_000,
+      now: () => now,
+    });
     assert.equal(fs.existsSync(stale), false);
     assert.equal(fs.existsSync(fresh), true);
     assert.equal(fs.existsSync(unrelated), true);

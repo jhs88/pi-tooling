@@ -78,9 +78,10 @@ export async function createChildResources(options: ChildResourceOptions) {
 }
 
 /**
- * Build the canonical Pi 0.83.0 model/auth runtime for a child session.
- * Catalog refresh is local-only; provider requests made later by the child are
- * unaffected. A fresh runtime per child avoids cross-session provider mutation.
+ * Build the canonical Pi 0.83.0 model/auth runtime for a child session. Catalog
+ * refresh is local-only; provider requests made later by the child are
+ * unaffected. A fresh runtime per child avoids cross-session provider
+ * mutation.
  */
 export function createChildModelRuntime(agentDir = getAgentDir()) {
   return ModelRuntime.create({
@@ -91,8 +92,8 @@ export function createChildModelRuntime(agentDir = getAgentDir()) {
 }
 
 /**
- * Same-directory children inherit the live parent decision. An alternate cwd
- * is trusted only when Pi's persisted trust store explicitly trusts it (or a
+ * Same-directory children inherit the live parent decision. An alternate cwd is
+ * trusted only when Pi's persisted trust store explicitly trusts it (or a
  * containing directory); unreadable/invalid trust data fails closed.
  */
 export function resolveStandaloneChildProjectTrust(options: {

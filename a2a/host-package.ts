@@ -57,11 +57,15 @@ export async function resolvePiCodingAgentPackageRoot(
   const configured = env.PI_A2A_PI_PACKAGE?.trim();
   if (configured) {
     if (!path.isAbsolute(configured)) {
-      throw new Error("PI_A2A_PI_PACKAGE must be an absolute package directory");
+      throw new Error(
+        "PI_A2A_PI_PACKAGE must be an absolute package directory",
+      );
     }
     const root = await findPackageRootFrom(configured);
     if (root) return root;
-    throw new Error("PI_A2A_PI_PACKAGE is not a Pi coding-agent package directory");
+    throw new Error(
+      "PI_A2A_PI_PACKAGE is not a Pi coding-agent package directory",
+    );
   }
 
   for (const executable of await executableCandidates(env)) {
@@ -84,7 +88,9 @@ export async function ensurePiCodingAgentResolution(
   }
 
   const packageRoot = await resolvePiCodingAgentPackageRoot(env);
-  const entryUrl = pathToFileURL(path.join(packageRoot, "dist", "index.js")).href;
+  const entryUrl = pathToFileURL(
+    path.join(packageRoot, "dist", "index.js"),
+  ).href;
   await access(new URL(entryUrl));
   registerHooks({
     resolve(specifier, context, nextResolve) {

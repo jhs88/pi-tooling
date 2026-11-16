@@ -1,7 +1,8 @@
 /**
  * Adapted with repository-owner authorization from davis7dotsh/my-pi-setup
  * commit 797eaf6d6f178759cf7aabde927ef15c91346e7e. Local hardening adds private
- * quota-bounded spill storage, stale cleanup, and best-effort secret redaction.
+ * quota-bounded spill storage, stale cleanup, and best-effort secret
+ * redaction.
  */
 
 import * as fs from "node:fs";
@@ -14,7 +15,10 @@ export const DEFAULT_SPILL_PER_STREAM = 8 * 1024 * 1024;
 export const DEFAULT_SPILL_PER_SESSION = 32 * 1024 * 1024;
 export const DEFAULT_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
-function utf8Tail(text: string, maxBytes: number): { text: string; dropped: number } {
+function utf8Tail(
+  text: string,
+  maxBytes: number,
+): { text: string; dropped: number } {
   const raw = Buffer.from(text, "utf8");
   if (raw.length <= maxBytes) return { text, dropped: 0 };
   let start = raw.length - maxBytes;
@@ -62,7 +66,10 @@ export class OutputBuffer {
     }
     this.chunks.push(chunk);
     this.retainedBytes += bytes;
-    while (this.retainedBytes > this.maxRetainedBytes && this.chunks.length > 1) {
+    while (
+      this.retainedBytes > this.maxRetainedBytes &&
+      this.chunks.length > 1
+    ) {
       const removed = this.chunks.shift();
       if (removed === undefined) break;
       const removedBytes = Buffer.byteLength(removed, "utf8");
@@ -112,7 +119,8 @@ export class SpillSession {
   private writers = new Set<SpillWriter>();
 
   constructor(options: SpillSessionOptions = {}) {
-    const root = options.root ?? path.join(os.tmpdir(), "pi-background-terminals");
+    const root =
+      options.root ?? path.join(os.tmpdir(), "pi-background-terminals");
     const now = options.now ?? Date.now;
     const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
     fs.mkdirSync(root, { recursive: true, mode: 0o700 });
@@ -165,7 +173,10 @@ export class SpillSession {
         }
         const available = Math.max(
           0,
-          Math.min(this.maxStreamBytes - bytes, this.maxSessionBytes - this.sessionBytes),
+          Math.min(
+            this.maxStreamBytes - bytes,
+            this.maxSessionBytes - this.sessionBytes,
+          ),
         );
         const originalBytes = Buffer.byteLength(text, "utf8");
         const retained = utf8Prefix(text, available);
@@ -207,11 +218,17 @@ export class SpillSession {
   }
 }
 
-const SECRET_KEY = /(secret|token|password|passwd|api[_-]?key|access[_-]?key|private[_-]?key|authorization)/i;
+const SECRET_KEY =
+  /(secret|token|password|passwd|api[_-]?key|access[_-]?key|private[_-]?key|authorization)/i;
 
-export function createSecretRedactor(env: NodeJS.ProcessEnv = process.env): (text: string) => string {
+export function createSecretRedactor(
+  env: NodeJS.ProcessEnv = process.env,
+): (text: string) => string {
   const inherited = Object.entries(env)
-    .filter(([key, value]) => SECRET_KEY.test(key) && typeof value === "string" && value.length >= 4)
+    .filter(
+      ([key, value]) =>
+        SECRET_KEY.test(key) && typeof value === "string" && value.length >= 4,
+    )
     .map(([, value]) => value as string)
     .sort((a, b) => b.length - a.length);
 
@@ -220,8 +237,14 @@ export function createSecretRedactor(env: NodeJS.ProcessEnv = process.env): (tex
     for (const value of inherited) safe = safe.split(value).join("[REDACTED]");
     safe = safe
       .replace(/(authorization\s*:\s*bearer\s+)[^\s]+/gi, "$1[REDACTED]")
-      .replace(/\b(gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,})\b/g, "[REDACTED]")
-      .replace(/\b(api[_-]?key|token|password|passwd|secret)\s*[:=]\s*([^\s,;]+)/gi, "$1=[REDACTED]");
+      .replace(
+        /\b(gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,})\b/g,
+        "[REDACTED]",
+      )
+      .replace(
+        /\b(api[_-]?key|token|password|passwd|secret)\s*[:=]\s*([^\s,;]+)/gi,
+        "$1=[REDACTED]",
+      );
     return safe;
   };
 }

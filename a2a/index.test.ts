@@ -11,13 +11,19 @@ import {
 } from "./index.ts";
 
 function fixture(autoStart = false, cliStart = false, maxContexts?: string) {
-  const eventHandlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
+  const eventHandlers = new Map<
+    string,
+    (event: unknown, ctx: ExtensionContext) => unknown
+  >();
   const commands = new Map<
     string,
     { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> }
   >();
   const notifications: Array<{ message: string; type?: string }> = [];
-  const flags = new Map<string, { type: "boolean" | "string"; default?: boolean | string }>();
+  const flags = new Map<
+    string,
+    { type: "boolean" | "string"; default?: boolean | string }
+  >();
   let starts = 0;
   let stops = 0;
   let closes = 0;
@@ -67,12 +73,17 @@ function fixture(autoStart = false, cliStart = false, maxContexts?: string) {
     },
   };
   const pi = {
-    on(event: string, handler: (event: unknown, ctx: ExtensionContext) => unknown) {
+    on(
+      event: string,
+      handler: (event: unknown, ctx: ExtensionContext) => unknown,
+    ) {
       eventHandlers.set(event, handler);
     },
     registerCommand(
       name: string,
-      command: { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> },
+      command: {
+        handler: (args: string, ctx: ExtensionCommandContext) => Promise<void>;
+      },
     ) {
       commands.set(name, command);
     },
@@ -142,9 +153,10 @@ test("the A2A command starts, reports, and stops one server idempotently", async
   await command.handler("status", app.context);
   assert.equal(app.counts.starts, 1);
   assert.equal(
-    app.notifications.some(({ message }) =>
-      message.includes("http://127.0.0.1:10000") &&
-      message.includes("/fixture/workspace")
+    app.notifications.some(
+      ({ message }) =>
+        message.includes("http://127.0.0.1:10000") &&
+        message.includes("/fixture/workspace"),
     ),
     true,
   );
@@ -174,7 +186,9 @@ test("the --a2a-server CLI flag starts the listener on session startup", async (
   assert.equal(app.counts.starts, 1);
   assert.equal(app.counts.createdMaxContexts, 512);
   assert.equal(
-    app.notifications.some(({ message }) => message.includes("http://127.0.0.1:10000")),
+    app.notifications.some(({ message }) =>
+      message.includes("http://127.0.0.1:10000"),
+    ),
     true,
   );
 });

@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository is the canonical source for the managed `jhs88/pi-tooling` Pi package. Read `CONTEXT.md` before architecture, debugging, or implementation work.
+This repository is the canonical source for the managed `jhs88/pi-tooling` Pi package.
 
 Do not edit Pi's generated package checkout. Edit this repository, verify it, and let Pi update the managed installation.
 
@@ -31,15 +31,21 @@ A real package-lifecycle change must be exercised through an isolated `pi instal
 - Keep Pi host packages in peer dependencies and third-party runtime modules in dependencies.
 - Keep upstream source attribution and license notices in the root README when adapting code.
 - Do not commit, push, open pull requests, merge, or release without explicit user direction.
+- Keep background terminals non-interactive, session-owned, output-bounded, redacted, and process-tree terminated.
+- Keep `@tintinweb/pi-subagents` a separate managed Pi package. It owns workflow scheduling and native MCP child initialization; do not add a second engine, resource cap, or source patch here.
+- Preserve standalone A2A child tool restrictions independently of workflow ownership.
+- In verified T3 sessions, use T3-owned delegation and task/thread controls so children are openable. Hide and block private Pi orchestration there. Standalone Pi retains the upstream engine. See [ADR 0003](docs/adr/0003-t3-native-delegation.md).
 
-## Project management
+## Agent skills
 
-Hermes Kanban board `pi-tooling` is the active tracker and audit trail. Do not create tracked `.scratch/` issue trees. Historical local-Markdown planning artifacts are read-only under `docs/history/`.
+### Issue tracker
 
-Kanban and Pi are development coordination tools, not runtime components of this package.
+Track issues and specs in GitHub Issues for `jhs88/pi-tooling`. Before reading, creating, or updating tickets, read [the issue tracker guide](docs/agents/issue-tracker.md).
 
-For board commands, routing, and triage states, read [the tracker guide](docs/agents/issue-tracker.md) before creating or updating cards.
+### Triage labels
 
-## Domain docs
+Use the five default triage labels. Before triaging tickets, read [the label mapping](docs/agents/triage-labels.md).
 
-Use the vocabulary in `CONTEXT.md`. Read relevant [ADRs](docs/adr/README.md) before architectural changes and surface conflicts with existing decisions. Create ADRs for durable decisions; keep task state on Kanban.
+### Domain docs
+
+Use a single root [glossary](GLOSSARY.md) and [ADRs](docs/adr/README.md). Before architecture, debugging, or implementation work, read [the domain guide](docs/agents/domain.md).

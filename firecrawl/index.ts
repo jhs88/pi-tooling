@@ -184,7 +184,13 @@ export default function firecrawlTools(pi: ExtensionAPI) {
           maximum: 20,
         }),
       ),
-      source: Type.Optional(Type.Union([Type.Literal("web"), Type.Literal("news"), Type.Literal("images")])),
+      source: Type.Optional(
+        Type.Union([
+          Type.Literal("web"),
+          Type.Literal("news"),
+          Type.Literal("images"),
+        ]),
+      ),
       scrapeResults: Type.Optional(
         Type.Boolean({
           description: SEARCH_PARAMETER_DESCRIPTIONS.scrapeResults,
@@ -253,7 +259,13 @@ export default function firecrawlTools(pi: ExtensionAPI) {
           description: CRAWL_PARAMETER_DESCRIPTIONS.allowSubdomains,
         }),
       ),
-      sitemap: Type.Optional(Type.Union([Type.Literal("include"), Type.Literal("skip"), Type.Literal("only")])),
+      sitemap: Type.Optional(
+        Type.Union([
+          Type.Literal("include"),
+          Type.Literal("skip"),
+          Type.Literal("only"),
+        ]),
+      ),
       onlyMainContent: Type.Optional(
         Type.Boolean({
           description: CRAWL_PARAMETER_DESCRIPTIONS.onlyMainContent,

@@ -90,7 +90,7 @@ function asJsonRpcId(value: unknown): JsonRpcId {
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -98,11 +98,12 @@ function taskIdentifier(params: unknown): string | null {
   const values = objectValue(params);
   const candidate = values?.taskId ?? values?.id;
   if (
-    typeof candidate !== "string"
-    || candidate.length === 0
-    || candidate.length > 200
-    || !/^[A-Za-z0-9._:-]+$/.test(candidate)
-  ) return null;
+    typeof candidate !== "string" ||
+    candidate.length === 0 ||
+    candidate.length > 200 ||
+    !/^[A-Za-z0-9._:-]+$/.test(candidate)
+  )
+    return null;
   return candidate;
 }
 
@@ -137,20 +138,27 @@ export class PiA2AServer {
       throw new Error("bearerToken is required");
     }
     if (
-      !Number.isSafeInteger(options.maxBodyBytes)
-      || options.maxBodyBytes <= 0
-      || options.maxBodyBytes > MAX_BODY_BYTES
+      !Number.isSafeInteger(options.maxBodyBytes) ||
+      options.maxBodyBytes <= 0 ||
+      options.maxBodyBytes > MAX_BODY_BYTES
     ) {
-      throw new Error("maxBodyBytes must be a positive integer no greater than 1 MiB");
+      throw new Error(
+        "maxBodyBytes must be a positive integer no greater than 1 MiB",
+      );
     }
     if (
-      !Number.isSafeInteger(options.maxTasks)
-      || options.maxTasks <= 0
-      || options.maxTasks > MAX_A2A_TASKS
+      !Number.isSafeInteger(options.maxTasks) ||
+      options.maxTasks <= 0 ||
+      options.maxTasks > MAX_A2A_TASKS
     ) {
-      throw new Error(`maxTasks must be a positive integer no greater than ${MAX_A2A_TASKS}`);
+      throw new Error(
+        `maxTasks must be a positive integer no greater than ${MAX_A2A_TASKS}`,
+      );
     }
-    if (!Number.isSafeInteger(options.executionTimeoutMs) || options.executionTimeoutMs <= 0) {
+    if (
+      !Number.isSafeInteger(options.executionTimeoutMs) ||
+      options.executionTimeoutMs <= 0
+    ) {
       throw new Error("executionTimeoutMs must be a positive integer");
     }
     this.#options = options;
@@ -215,7 +223,7 @@ export class PiA2AServer {
     if (!server) return;
     this.#stopping = true;
     const closing = new Promise<void>((resolve, reject) => {
-      server.close((error) => error ? reject(error) : resolve());
+      server.close((error) => (error ? reject(error) : resolve()));
     });
     for (const controller of this.#requestControllers) {
       controller.abort(new Error("A2A server is stopping"));
@@ -252,7 +260,8 @@ export class PiA2AServer {
     const caller = new AbortController();
     this.#requestControllers.add(caller);
     const onDisconnect = () => {
-      if (!res.writableEnded) caller.abort(new Error("A2A client disconnected"));
+      if (!res.writableEnded)
+        caller.abort(new Error("A2A client disconnected"));
     };
     res.once("close", onDisconnect);
     try {
@@ -267,14 +276,16 @@ export class PiA2AServer {
 
       const path = new URL(req.url ?? "/", "http://localhost").pathname;
       if (
-        req.method === "GET"
-        && (
-          path === "/.well-known/agent-card.json"
-          || path === "/.well-known/agent-card"
-          || path === "/.well-known/agent.json"
-        )
+        req.method === "GET" &&
+        (path === "/.well-known/agent-card.json" ||
+          path === "/.well-known/agent-card" ||
+          path === "/.well-known/agent.json")
       ) {
-        this.#sendJson(res, 200, buildAgentCard({ interfaceUrl: this.#interfaceUrl() }));
+        this.#sendJson(
+          res,
+          200,
+          buildAgentCard({ interfaceUrl: this.#interfaceUrl() }),
+        );
         return;
       }
 
@@ -310,9 +321,9 @@ export class PiA2AServer {
       }
 
       if (
-        request.jsonrpc === "2.0"
-        && request.method === "SendMessage"
-        && this.#controllers.size >= 1
+        request.jsonrpc === "2.0" &&
+        request.method === "SendMessage" &&
+        this.#controllers.size >= 1
       ) {
         this.#sendJson(
           res,
@@ -391,12 +402,17 @@ export class PiA2AServer {
       taskId = referenced.id;
       contextId = referenced.contextId;
     } else if (extracted.contextId) {
-      const continuable = [...this.#tasks.values()].filter((task) => (
-        task.contextId === extracted.contextId
-        && CONTINUABLE_STATES.has(task.status.state)
-      ));
+      const continuable = [...this.#tasks.values()].filter(
+        (task) =>
+          task.contextId === extracted.contextId &&
+          CONTINUABLE_STATES.has(task.status.state),
+      );
       if (continuable.length > 1) {
-        return jsonRpcError(id, -32602, "taskId is required for ambiguous context continuation");
+        return jsonRpcError(
+          id,
+          -32602,
+          "taskId is required for ambiguous context continuation",
+        );
       }
       taskId = continuable[0]?.id ?? `task-${randomUUID()}`;
       contextId = extracted.contextId;
@@ -433,7 +449,9 @@ export class PiA2AServer {
             : new Error("execution canceled"),
         );
       };
-      controller.signal.addEventListener("abort", onExecutionAbort, { once: true });
+      controller.signal.addEventListener("abort", onExecutionAbort, {
+        once: true,
+      });
       const timeout = new ExecutionTimeoutError("execution timed out");
       executionTimeout = setTimeout(() => {
         controller.abort(timeout);
@@ -447,20 +465,25 @@ export class PiA2AServer {
       this.#controllers.delete(taskId);
       this.#executionSettlements.delete(taskId);
     };
-    const executionPromise = Promise.resolve().then(() => this.#options.execute({
-      taskId,
-      contextId,
-      messageId: extracted.messageId,
-      message: extracted.text,
-      signal: controller.signal,
-    }));
+    const executionPromise = Promise.resolve().then(() =>
+      this.#options.execute({
+        taskId,
+        contextId,
+        messageId: extracted.messageId,
+        message: extracted.text,
+        signal: controller.signal,
+      }),
+    );
     const trackedExecution = executionPromise.finally(() => {
       executorSettled = true;
       if (requestSettled) releaseExecution();
     });
     this.#executionSettlements.set(
       taskId,
-      trackedExecution.then(() => undefined, () => undefined),
+      trackedExecution.then(
+        () => undefined,
+        () => undefined,
+      ),
     );
 
     let finalTask: A2ATask;
@@ -472,29 +495,40 @@ export class PiA2AServer {
       if (!EXECUTION_RESULT_STATES.has(execution.state)) {
         throw new Error("executor must return a terminal task state");
       }
-      const timedOut = controller.signal.reason instanceof ExecutionTimeoutError;
-      finalTask = taskFromExecution({
-        taskId,
-        contextId,
-        text: timedOut ? "execution timed out"
-          : controller.signal.aborted ? "canceled"
-          : execution.text,
-        state: timedOut ? "TASK_STATE_FAILED"
-          : controller.signal.aborted ? "TASK_STATE_CANCELED"
-          : execution.state,
-      });
-    } catch (error) {
-      const timedOut = controller.signal.reason instanceof ExecutionTimeoutError;
+      const timedOut =
+        controller.signal.reason instanceof ExecutionTimeoutError;
       finalTask = taskFromExecution({
         taskId,
         contextId,
         text: timedOut
           ? "execution timed out"
-          : controller.signal.aborted ? "canceled"
-          : error instanceof Error ? error.message : "Pi execution failed",
-        state: timedOut ? "TASK_STATE_FAILED"
-          : controller.signal.aborted ? "TASK_STATE_CANCELED"
-          : "TASK_STATE_FAILED",
+          : controller.signal.aborted
+            ? "canceled"
+            : execution.text,
+        state: timedOut
+          ? "TASK_STATE_FAILED"
+          : controller.signal.aborted
+            ? "TASK_STATE_CANCELED"
+            : execution.state,
+      });
+    } catch (error) {
+      const timedOut =
+        controller.signal.reason instanceof ExecutionTimeoutError;
+      finalTask = taskFromExecution({
+        taskId,
+        contextId,
+        text: timedOut
+          ? "execution timed out"
+          : controller.signal.aborted
+            ? "canceled"
+            : error instanceof Error
+              ? error.message
+              : "Pi execution failed",
+        state: timedOut
+          ? "TASK_STATE_FAILED"
+          : controller.signal.aborted
+            ? "TASK_STATE_CANCELED"
+            : "TASK_STATE_FAILED",
       });
     } finally {
       if (executionTimeout) clearTimeout(executionTimeout);
@@ -521,43 +555,62 @@ export class PiA2AServer {
     const values = objectValue(params) ?? {};
     const pageSize = values.pageSize === undefined ? 50 : values.pageSize;
     if (
-      !Number.isSafeInteger(pageSize)
-      || (pageSize as number) < 1
-      || (pageSize as number) > 100
-    ) return jsonRpcError(id, -32602, "pageSize must be an integer from 1 to 100");
+      !Number.isSafeInteger(pageSize) ||
+      (pageSize as number) < 1 ||
+      (pageSize as number) > 100
+    )
+      return jsonRpcError(
+        id,
+        -32602,
+        "pageSize must be an integer from 1 to 100",
+      );
     if (
-      values.contextId !== undefined
-      && (
-        typeof values.contextId !== "string"
-        || values.contextId.length === 0
-        || values.contextId.length > 200
-        || !/^[A-Za-z0-9._:-]+$/.test(values.contextId)
-      )
-    ) return jsonRpcError(id, -32602, "contextId is invalid");
+      values.contextId !== undefined &&
+      (typeof values.contextId !== "string" ||
+        values.contextId.length === 0 ||
+        values.contextId.length > 200 ||
+        !/^[A-Za-z0-9._:-]+$/.test(values.contextId))
+    )
+      return jsonRpcError(id, -32602, "contextId is invalid");
     if (
-      values.status !== undefined
-      && !TASK_STATES.has(values.status as TaskState)
-    ) return jsonRpcError(id, -32602, "status is invalid");
-    const after = values.statusTimestampAfter === undefined
-      ? undefined
-      : typeof values.statusTimestampAfter === "string"
-        ? Date.parse(values.statusTimestampAfter)
-        : Number.NaN;
+      values.status !== undefined &&
+      !TASK_STATES.has(values.status as TaskState)
+    )
+      return jsonRpcError(id, -32602, "status is invalid");
+    const after =
+      values.statusTimestampAfter === undefined
+        ? undefined
+        : typeof values.statusTimestampAfter === "string"
+          ? Date.parse(values.statusTimestampAfter)
+          : Number.NaN;
     if (after !== undefined && !Number.isFinite(after)) {
       return jsonRpcError(id, -32602, "statusTimestampAfter is invalid");
     }
-    if (values.includeArtifacts !== undefined && typeof values.includeArtifacts !== "boolean") {
+    if (
+      values.includeArtifacts !== undefined &&
+      typeof values.includeArtifacts !== "boolean"
+    ) {
       return jsonRpcError(id, -32602, "includeArtifacts must be boolean");
     }
 
     const matching = [...this.#tasks.values()]
-      .filter((task) => values.contextId === undefined || task.contextId === values.contextId)
-      .filter((task) => values.status === undefined || task.status.state === values.status)
-      .filter((task) => after === undefined || Date.parse(task.status.timestamp) >= after)
-      .sort((left, right) => (
-        right.status.timestamp.localeCompare(left.status.timestamp)
-        || right.id.localeCompare(left.id)
-      ));
+      .filter(
+        (task) =>
+          values.contextId === undefined || task.contextId === values.contextId,
+      )
+      .filter(
+        (task) =>
+          values.status === undefined || task.status.state === values.status,
+      )
+      .filter(
+        (task) =>
+          after === undefined || Date.parse(task.status.timestamp) >= after,
+      )
+      .sort(
+        (left, right) =>
+          right.status.timestamp.localeCompare(left.status.timestamp) ||
+          right.id.localeCompare(left.id),
+      );
     let start = 0;
     if (values.pageToken !== undefined && values.pageToken !== "") {
       if (typeof values.pageToken !== "string") {
@@ -565,32 +618,42 @@ export class PiA2AServer {
       }
       let cursor: unknown;
       try {
-        cursor = JSON.parse(Buffer.from(values.pageToken, "base64url").toString("utf8"));
+        cursor = JSON.parse(
+          Buffer.from(values.pageToken, "base64url").toString("utf8"),
+        );
       } catch {
         return jsonRpcError(id, -32602, "pageToken is invalid");
       }
       if (
-        !Array.isArray(cursor)
-        || cursor.length !== 2
-        || cursor.some((value) => typeof value !== "string")
-      ) return jsonRpcError(id, -32602, "pageToken is invalid");
-      const cursorIndex = matching.findIndex((task) => (
-        task.status.timestamp === cursor[0] && task.id === cursor[1]
-      ));
-      if (cursorIndex < 0) return jsonRpcError(id, -32602, "pageToken is stale");
+        !Array.isArray(cursor) ||
+        cursor.length !== 2 ||
+        cursor.some((value) => typeof value !== "string")
+      )
+        return jsonRpcError(id, -32602, "pageToken is invalid");
+      const cursorIndex = matching.findIndex(
+        (task) => task.status.timestamp === cursor[0] && task.id === cursor[1],
+      );
+      if (cursorIndex < 0)
+        return jsonRpcError(id, -32602, "pageToken is stale");
       start = cursorIndex + 1;
     }
     const page = matching.slice(start, start + (pageSize as number));
     const hasMore = start + page.length < matching.length;
     const last = page.at(-1);
-    const tasks = page.map((task) => values.includeArtifacts
-      ? task
-      : (({ artifacts: _artifacts, ...withoutArtifacts }) => withoutArtifacts)(task));
+    const tasks = page.map((task) =>
+      values.includeArtifacts
+        ? task
+        : (({ artifacts: _artifacts, ...withoutArtifacts }) =>
+            withoutArtifacts)(task),
+    );
     return jsonRpcResult(id, {
       tasks,
-      nextPageToken: hasMore && last
-        ? Buffer.from(JSON.stringify([last.status.timestamp, last.id])).toString("base64url")
-        : "",
+      nextPageToken:
+        hasMore && last
+          ? Buffer.from(
+              JSON.stringify([last.status.timestamp, last.id]),
+            ).toString("base64url")
+          : "",
       pageSize,
       totalSize: matching.length,
     });
@@ -623,9 +686,11 @@ export class PiA2AServer {
       return;
     }
     if (this.#tasks.size >= this.#options.maxTasks) {
-      const evictable = [...this.#tasks.entries()]
-        .find(([, candidate]) => TERMINAL_STATES.has(candidate.status.state));
-      if (!evictable) throw new TaskCapacityError("all retained tasks are active");
+      const evictable = [...this.#tasks.entries()].find(([, candidate]) =>
+        TERMINAL_STATES.has(candidate.status.state),
+      );
+      if (!evictable)
+        throw new TaskCapacityError("all retained tasks are active");
       this.#tasks.delete(evictable[0]);
     }
     this.#tasks.set(task.id, task);
@@ -669,9 +734,10 @@ export class PiA2AServer {
       };
       const onError = (error: Error) => fail(error);
       const onAbort = () => {
-        const reason = signal.reason instanceof Error
-          ? signal.reason
-          : new Error("A2A request aborted");
+        const reason =
+          signal.reason instanceof Error
+            ? signal.reason
+            : new Error("A2A request aborted");
         fail(reason);
         req.destroy();
       };

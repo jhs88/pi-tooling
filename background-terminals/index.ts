@@ -4,18 +4,19 @@
  * inspect and stop, but never write to (stdin is ignored at the OS level).
  *
  * Tools (for the LLM):
- * - bg_start: fire-and-forget spawn (command, title, working_dir). Max 8
- *   running at once. The model is notified exactly once when a process exits.
- * - bg_status: peek at one terminal's status + tail-truncated output.
- * - bg_list: list all tracked terminals (running and settled).
- * - bg_kill: SIGTERM→SIGKILL the whole process tree; returns final state.
  *
- * While ≥1 process runs, a one-line widget above the editor shows
- * "N background terminal(s) running • /ps to view". `/ps` opens a two-stage
- * full-screen overlay (list → read-only detail with stdout/stderr toggle).
+ * - Bg_start: fire-and-forget spawn (command, title, working_dir). Max 8 running
+ *   at once. The model is notified exactly once when a process exits.
+ * - Bg_status: peek at one terminal's status + tail-truncated output.
+ * - Bg_list: list all tracked terminals (running and settled).
+ * - Bg_kill: SIGTERM→SIGKILL the whole process tree; returns final state.
  *
- * Architecture: one dependency-free process supervisor per Pi session.
- * Node process and stream plumbing is bounded and callback-driven.
+ * While ≥1 process runs, a one-line widget above the editor shows "N background
+ * terminal(s) running • /ps to view". `/ps` opens a two-stage full-screen
+ * overlay (list → read-only detail with stdout/stderr toggle).
+ *
+ * Architecture: one dependency-free process supervisor per Pi session. Node
+ * process and stream plumbing is bounded and callback-driven.
  */
 
 import * as fs from "node:fs";
@@ -25,10 +26,7 @@ import type {
   ExtensionContext,
   ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
-import {
-  getAgentDir,
-  getMarkdownTheme,
-} from "@earendil-works/pi-coding-agent";
+import { getAgentDir, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { TerminalSnapshot } from "./src/domain.ts";
@@ -77,11 +75,13 @@ export default function (pi: ExtensionAPI) {
     return manager;
   };
 
-  /** One-line widget directly above the editor, only while ≥1 is running.
-   * Called on every manager notification (including per-output-chunk), so it
-   * only touches setWidget when the running count actually changes —
-   * replacing the widget factory hundreds of times a second would churn
-   * component creation for no visible difference. */
+  /**
+   * One-line widget directly above the editor, only while ≥1 is running. Called
+   * on every manager notification (including per-output-chunk), so it only
+   * touches setWidget when the running count actually changes — replacing the
+   * widget factory hundreds of times a second would churn component creation
+   * for no visible difference.
+   */
   let widgetRunning = 0;
   const updateWidget = (manager: TerminalManager) => {
     if (!ui) return;
@@ -120,7 +120,9 @@ export default function (pi: ExtensionAPI) {
       pi.sendMessage(
         {
           customType: "background-terminal-result",
-          content: snapshots.map(buildTerminalResultMessage).join("\n\n---\n\n"),
+          content: snapshots
+            .map(buildTerminalResultMessage)
+            .join("\n\n---\n\n"),
           display: true,
           details: {
             id: single?.id ?? "batch",

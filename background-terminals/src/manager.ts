@@ -119,16 +119,24 @@ export interface TerminalManager {
   get(id: string): TerminalSnapshot | undefined;
   list(): ReadonlyArray<TerminalSnapshot>;
   waitForSettlement(id: string): Promise<TerminalSnapshot>;
-  kill(ids: ReadonlyArray<string>, signal?: AbortSignal): Promise<ReadonlyArray<KillResult>>;
+  kill(
+    ids: ReadonlyArray<string>,
+    signal?: AbortSignal,
+  ): Promise<ReadonlyArray<KillResult>>;
   requestKill(id: string): void;
   subscribe(listener: () => void): () => void;
   subscribeTo(id: string, listener: () => void): () => void;
-  setOnSettled(hook: ((snapshot: TerminalSnapshot, consumed: boolean) => void) | undefined): void;
+  setOnSettled(
+    hook: ((snapshot: TerminalSnapshot, consumed: boolean) => void) | undefined,
+  ): void;
   dispose(): Promise<void>;
 }
 
 function boundedError(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error)).slice(0, ERROR_TEXT_MAX);
+  return (error instanceof Error ? error.message : String(error)).slice(
+    0,
+    ERROR_TEXT_MAX,
+  );
 }
 
 function delay(ms: number): Promise<void> {
@@ -137,11 +145,14 @@ function delay(ms: number): Promise<void> {
 
 function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(new Error("Operation was aborted."));
+  if (signal.aborted)
+    return Promise.reject(new Error("Operation was aborted."));
   return new Promise<T>((resolve, reject) => {
     const abort = () => reject(new Error("Operation was aborted."));
     signal.addEventListener("abort", abort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    promise
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
   });
 }
 
@@ -150,7 +161,12 @@ function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
     try {
       const killer = spawn(
         "taskkill",
-        ["/pid", String(child.pid), "/T", ...(signal === "SIGKILL" ? ["/F"] : [])],
+        [
+          "/pid",
+          String(child.pid),
+          "/T",
+          ...(signal === "SIGKILL" ? ["/F"] : []),
+        ],
         { stdio: "ignore", windowsHide: true },
       );
       const fallback = () => {
@@ -186,7 +202,9 @@ function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
   }
 }
 
-export function createTerminalManager(options: TerminalManagerOptions = {}): TerminalManager {
+export function createTerminalManager(
+  options: TerminalManagerOptions = {},
+): TerminalManager {
   const entries = new Map<string, Entry>();
   const listeners = new Set<() => void>();
   const idListeners = new Map<string, Set<() => void>>();
@@ -202,7 +220,8 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
   let reserved = 0;
   let disposed = false;
   let disposePromise: Promise<void> | undefined;
-  let onSettled: ((snapshot: TerminalSnapshot, consumed: boolean) => void) | undefined;
+  let onSettled:
+    ((snapshot: TerminalSnapshot, consumed: boolean) => void) | undefined;
 
   const notify = (id?: string) => {
     for (const listener of Array.from(listeners)) {
@@ -223,7 +242,10 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
     }
   };
 
-  const runningCount = () => Array.from(entries.values()).filter((entry) => entry.snapshot.status === "running").length;
+  const runningCount = () =>
+    Array.from(entries.values()).filter(
+      (entry) => entry.snapshot.status === "running",
+    ).length;
 
   const syncSpillInfo = (buffer: OutputBuffer, writer?: SpillWriter) => {
     if (!writer) {
@@ -248,8 +270,14 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
   const prune = () => {
     if (entries.size <= MAX_TRACKED) return;
     const settled = Array.from(entries.values())
-      .filter((entry) => entry.snapshot.status !== "running" && !killInterest.has(entry.snapshot.id))
-      .sort((a, b) => (a.snapshot.settledAt ?? 0) - (b.snapshot.settledAt ?? 0));
+      .filter(
+        (entry) =>
+          entry.snapshot.status !== "running" &&
+          !killInterest.has(entry.snapshot.id),
+      )
+      .sort(
+        (a, b) => (a.snapshot.settledAt ?? 0) - (b.snapshot.settledAt ?? 0),
+      );
     for (const entry of settled) {
       if (entries.size <= MAX_TRACKED) break;
       entries.delete(entry.snapshot.id);
@@ -287,13 +315,20 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
     if (entry.termination) return entry.termination;
     entry.termination = (async () => {
       signalProcessTree(entry.child, "SIGTERM");
-      await Promise.race([entry.settlePromise.then(() => undefined), delay(FORCE_KILL_AFTER_MS)]);
+      await Promise.race([
+        entry.settlePromise.then(() => undefined),
+        delay(FORCE_KILL_AFTER_MS),
+      ]);
       if (entry.snapshot.status === "running") {
         signalProcessTree(entry.child, "SIGKILL");
-        await Promise.race([entry.settlePromise.then(() => undefined), delay(FINAL_CLOSE_GRACE_MS)]);
+        await Promise.race([
+          entry.settlePromise.then(() => undefined),
+          delay(FINAL_CLOSE_GRACE_MS),
+        ]);
       }
       if (entry.snapshot.status === "running") {
-        entry.snapshot.errorText ??= "stdio did not close after process-tree termination; retained output may be incomplete";
+        entry.snapshot.errorText ??=
+          "stdio did not close after process-tree termination; retained output may be incomplete";
         settle(entry);
       }
     })();
@@ -308,14 +343,23 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
         description: options.shell.description,
       };
     }
-    return selectShellInvocation(command, process.platform, options.env ?? process.env);
+    return selectShellInvocation(
+      command,
+      process.platform,
+      options.env ?? process.env,
+    );
   };
 
   const start = (startOptions: StartOptions): Promise<TerminalSnapshot> => {
-    if (disposed) return Promise.reject(new Error("Background terminal manager is shutting down."));
+    if (disposed)
+      return Promise.reject(
+        new Error("Background terminal manager is shutting down."),
+      );
     if (runningCount() + reserved >= MAX_RUNNING) {
       return Promise.reject(
-        new Error(`Max ${MAX_RUNNING} background terminals can run concurrently. Stop one with bg_kill before starting another.`),
+        new Error(
+          `Max ${MAX_RUNNING} background terminals can run concurrently. Stop one with bg_kill before starting another.`,
+        ),
       );
     }
     reserved++;
@@ -401,7 +445,8 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
           snapshot.signal = signal ?? undefined;
         }
         entry.exitCleanup = setTimeout(() => {
-          if (snapshot.status === "running" && !entry.stdioClosed) void terminate(entry, false);
+          if (snapshot.status === "running" && !entry.stdioClosed)
+            void terminate(entry, false);
         }, EXIT_PIPE_GRACE_MS);
       });
       child.once("close", (code, signal) => {
@@ -416,12 +461,18 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
 
       if (disposed) {
         void terminate(entry, true);
-        return Promise.reject(new Error("Background terminal manager shut down while starting."));
+        return Promise.reject(
+          new Error("Background terminal manager shut down while starting."),
+        );
       }
       notify(id);
       return Promise.resolve(snapshot);
     } catch (error) {
-      return Promise.reject(new Error(`Unable to start background terminal: ${boundedError(error)}`));
+      return Promise.reject(
+        new Error(
+          `Unable to start background terminal: ${boundedError(error)}`,
+        ),
+      );
     } finally {
       reserved--;
     }
@@ -439,14 +490,19 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
     prune();
   };
 
-  const kill = async (ids: ReadonlyArray<string>, signal?: AbortSignal): Promise<ReadonlyArray<KillResult>> => {
+  const kill = async (
+    ids: ReadonlyArray<string>,
+    signal?: AbortSignal,
+  ): Promise<ReadonlyArray<KillResult>> => {
     const unique = Array.from(new Set(ids));
     const selected = unique.map((id) => {
       const entry = entries.get(id);
       if (!entry) throw new Error(`Unknown terminal id "${id}".`);
       return entry;
     });
-    const running = selected.filter((entry) => entry.snapshot.status === "running");
+    const running = selected.filter(
+      (entry) => entry.snapshot.status === "running",
+    );
     const runningIds = running.map((entry) => entry.snapshot.id);
     addInterest(runningIds);
     try {
@@ -471,7 +527,8 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
 
   const exitSafety = () => {
     for (const entry of entries.values()) {
-      if (entry.snapshot.status === "running") signalProcessTree(entry.child, "SIGTERM");
+      if (entry.snapshot.status === "running")
+        signalProcessTree(entry.child, "SIGTERM");
     }
   };
   process.once("exit", exitSafety);
@@ -482,7 +539,9 @@ export function createTerminalManager(options: TerminalManagerOptions = {}): Ter
     list: () => Array.from(entries.values()).map((entry) => entry.snapshot),
     waitForSettlement: (id) => {
       const entry = entries.get(id);
-      return entry ? entry.settlePromise : Promise.reject(new Error(`Unknown terminal id "${id}".`));
+      return entry
+        ? entry.settlePromise
+        : Promise.reject(new Error(`Unknown terminal id "${id}".`));
     },
     kill,
     requestKill: (id) => {

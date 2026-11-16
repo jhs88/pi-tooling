@@ -55,13 +55,16 @@ export interface AgentCardOptions {
 export function buildAgentCard({ interfaceUrl }: AgentCardOptions) {
   return {
     name: "pi-coding-agent",
-    description: "Pi coding agent exposed through an authenticated A2A v1.0 interface",
+    description:
+      "Pi coding agent exposed through an authenticated A2A v1.0 interface",
     version: "0.1.0",
-    supportedInterfaces: [{
-      protocolBinding: "JSONRPC",
-      protocolVersion: "1.0",
-      url: interfaceUrl,
-    }],
+    supportedInterfaces: [
+      {
+        protocolBinding: "JSONRPC",
+        protocolVersion: "1.0",
+        url: interfaceUrl,
+      },
+    ],
     capabilities: {
       streaming: false,
       pushNotifications: false,
@@ -73,7 +76,8 @@ export function buildAgentCard({ interfaceUrl }: AgentCardOptions) {
       {
         id: "code",
         name: "Code",
-        description: "Perform bounded coding and code-review tasks in the configured workspace",
+        description:
+          "Perform bounded coding and code-review tasks in the configured workspace",
         tags: ["code", "review"],
       },
     ],
@@ -89,7 +93,9 @@ export function buildAgentCard({ interfaceUrl }: AgentCardOptions) {
 
 function boundedIdentifier(name: string, value: unknown): string {
   if (typeof value !== "string" || value.length === 0 || value.length > 200) {
-    throw new Error(`${name} must be a non-empty string no longer than 200 characters`);
+    throw new Error(
+      `${name} must be a non-empty string no longer than 200 characters`,
+    );
   }
   if (!/^[A-Za-z0-9._:-]+$/.test(value)) {
     throw new Error(`${name} contains unsupported characters`);
@@ -101,17 +107,20 @@ export function extractUserText(message: A2AMessage) {
   if (message.role !== "ROLE_USER") {
     throw new Error("message role must be ROLE_USER");
   }
-  const contextId = message.contextId === undefined
-    ? undefined
-    : boundedIdentifier("contextId", message.contextId);
-  const taskId = message.taskId === undefined
-    ? undefined
-    : boundedIdentifier("taskId", message.taskId);
+  const contextId =
+    message.contextId === undefined
+      ? undefined
+      : boundedIdentifier("contextId", message.contextId);
+  const taskId =
+    message.taskId === undefined
+      ? undefined
+      : boundedIdentifier("taskId", message.taskId);
   const messageId = boundedIdentifier("messageId", message.messageId);
   const text = (message.parts ?? [])
-    .filter((part): part is Record<string, unknown> & { text: string } => (
-      typeof part.text === "string" && part.text.length > 0
-    ))
+    .filter(
+      (part): part is Record<string, unknown> & { text: string } =>
+        typeof part.text === "string" && part.text.length > 0,
+    )
     .map((part) => part.text)
     .join("\n");
   if (!text) {
@@ -151,31 +160,32 @@ export function taskFromExecution(options: {
     status: {
       state: options.state,
       timestamp,
-      ...(
-        options.state === "TASK_STATE_INPUT_REQUIRED"
-        || options.state === "TASK_STATE_FAILED"
-        || options.state === "TASK_STATE_CANCELED"
-        || options.state === "TASK_STATE_REJECTED"
-        || options.state === "TASK_STATE_AUTH_REQUIRED"
-          ? {
-              message: {
-                messageId: `${options.taskId}-status`,
-                contextId: options.contextId,
-                taskId: options.taskId,
-                role: "ROLE_AGENT" as const,
-                parts: [textPart],
-              },
-            }
-          : {}
-      ),
+      ...(options.state === "TASK_STATE_INPUT_REQUIRED" ||
+      options.state === "TASK_STATE_FAILED" ||
+      options.state === "TASK_STATE_CANCELED" ||
+      options.state === "TASK_STATE_REJECTED" ||
+      options.state === "TASK_STATE_AUTH_REQUIRED"
+        ? {
+            message: {
+              messageId: `${options.taskId}-status`,
+              contextId: options.contextId,
+              taskId: options.taskId,
+              role: "ROLE_AGENT" as const,
+              parts: [textPart],
+            },
+          }
+        : {}),
     },
-    artifacts: options.state === "TASK_STATE_COMPLETED"
-      ? [{
-          artifactId: `${options.taskId}-result`,
-          name: "result",
-          parts: [textPart],
-        }]
-      : [],
+    artifacts:
+      options.state === "TASK_STATE_COMPLETED"
+        ? [
+            {
+              artifactId: `${options.taskId}-result`,
+              name: "result",
+              parts: [textPart],
+            },
+          ]
+        : [],
   };
 }
 

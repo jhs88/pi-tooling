@@ -14,8 +14,13 @@ async function productionSources(directory: string): Promise<string[]> {
   for (const entry of entries) {
     if (entry.name === "node_modules") continue;
     const candidate = join(directory, entry.name);
-    if (entry.isDirectory()) paths.push(...await productionSources(candidate));
-    else if (entry.isFile() && entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+    if (entry.isDirectory())
+      paths.push(...(await productionSources(candidate)));
+    else if (
+      entry.isFile() &&
+      entry.name.endsWith(".ts") &&
+      !entry.name.endsWith(".test.ts")
+    ) {
       paths.push(candidate);
     }
   }
@@ -32,11 +37,15 @@ test("the package extension loads without registration conflicts", async () => {
   const sources = await productionSources(packageRoot);
   for (const sourcePath of sources) {
     const source = await readFile(sourcePath, "utf8");
-    for (const match of source.matchAll(/registerTool(?:<[^;{}]*>)?\s*\(\s*\{\s*name:\s*["']([^"']+)["']/g)) {
+    for (const match of source.matchAll(
+      /registerTool(?:<[^;{}]*>)?\s*\(\s*\{\s*name:\s*["']([^"']+)["']/g,
+    )) {
       const name = match[1];
       registrations.set(name, [...(registrations.get(name) ?? []), sourcePath]);
     }
-    for (const match of source.matchAll(/registerCommand\s*\(\s*["']([^"']+)["']/g)) {
+    for (const match of source.matchAll(
+      /registerCommand\s*\(\s*["']([^"']+)["']/g,
+    )) {
       const name = match[1];
       commands.set(name, [...(commands.get(name) ?? []), sourcePath]);
     }
@@ -63,10 +72,10 @@ test("the package exposes guidance for its specialized Pi tools as skills", asyn
     source: "@jhs88/pi-tooling",
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.deepEqual(result.skills.map((skill) => skill.name), [
-    "background-terminals",
-    "workflows",
-  ]);
+  assert.deepEqual(
+    result.skills.map((skill) => skill.name),
+    ["background-terminals", "workflows"],
+  );
 });
 
 test("the package exposes the headless A2A server executable", async () => {
@@ -79,7 +88,10 @@ test("the package exposes the headless A2A server executable", async () => {
   };
   assert.equal(manifest.bin?.["pi-a2a-server"], "./a2a/cli.mjs");
   assert.equal(manifest.engines?.node, ">=22.19.0");
-  assert.equal(manifest.scripts?.["verify:production"], "node scripts/verify-production-install.mjs");
+  assert.equal(
+    manifest.scripts?.["verify:production"],
+    "node scripts/verify-production-install.mjs",
+  );
 
   const executable = await stat(join(packageRoot, "a2a", "cli.mjs"));
   assert.notEqual(executable.mode & 0o111, 0);

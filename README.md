@@ -2,14 +2,14 @@
 
 A managed [Pi package](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md) for file search, self-hosted web research, user questions, background processes, and subagent compatibility.
 
-| Capability | Tools or entry point |
-| --- | --- |
-| File search | `fd`, `rg`; system binaries or checksum-verified official downloads |
-| Web research | `search`, `scrape`, `crawl`; requires self-hosted Firecrawl |
-| User questions | `ask_user`; selectable choices and custom answers |
-| Background processes | `bg_start`, `bg_status`, `bg_list`, `bg_kill`; `/ps` in the terminal UI |
-| Subagents | Compatibility tools for separately installed `@tintinweb/pi-subagents` |
-| A2A bridge | Opt-in authenticated loopback server; [setup and configuration](a2a/README.md) |
+| Capability           | Tools or entry point                                                           |
+| -------------------- | ------------------------------------------------------------------------------ |
+| File search          | `fd`, `rg`; system binaries or checksum-verified official downloads            |
+| Web research         | `search`, `scrape`, `crawl`; requires self-hosted Firecrawl                    |
+| User questions       | `ask_user`; selectable choices and custom answers                              |
+| Background processes | `bg_start`, `bg_status`, `bg_list`, `bg_kill`; `/ps` in the terminal UI        |
+| Subagents            | Compatibility tools for separately installed `@tintinweb/pi-subagents`         |
+| A2A bridge           | Opt-in authenticated loopback server; [setup and configuration](a2a/README.md) |
 
 ## Install and update
 
@@ -48,16 +48,26 @@ In verified T3 Code sessions, the layer prefers T3's native delegation tools so 
 
 ## Development
 
-Read [CONTEXT.md](CONTEXT.md) and [AGENTS.md](AGENTS.md) before changing architecture or runtime behavior.
+Read [AGENTS.md](AGENTS.md) and the [glossary](GLOSSARY.md) before changing architecture or runtime behavior.
 
 ```bash
 npm ci
 npm run verify
 ```
 
-Verification runs TypeScript checks and the complete test suite. Packaging changes also require the production dependency checks in [AGENTS.md](AGENTS.md). `npm run verify:production` tests an isolated production install and the headless A2A runtime check.
+Verification runs ESLint, Prettier's formatting check, TypeScript checks, and the complete test suite. Run `npm run lint:fix` for automatic lint fixes and `npm run format` to format source, tests, configuration, and Markdown. Individual checks are available as `npm run lint`, `npm run format:check`, `npm run check`, and `npm test`.
 
-[Architecture decisions](docs/adr/README.md) record durable choices. Hermes Kanban board `pi-tooling` tracks active work; [docs/history](docs/history/) preserves the read-only planning archive.
+ESLint uses the recommended JavaScript and TypeScript rules with Node globals.
+Prettier owns formatting, including JSDoc, and preserves Markdown prose wrapping.
+Both tools read `.gitignore`; `.prettierignore` also excludes the lockfile.
+
+Type checking uses the TypeScript 7 CLI installed as `typescript7`. ESLint uses TypeScript 6's compiler API through `typescript`, within [typescript-eslint's supported range](https://typescript-eslint.io/users/dependency-versions/).
+
+The scoped `minimatch` override supplies the [patched release](https://github.com/advisories/GHSA-g3hv-75wg-m249) until typescript-eslint updates its dependency range.
+
+Packaging changes also require the production dependency checks in [AGENTS.md](AGENTS.md). `npm run verify:production` tests an isolated production install and the headless A2A runtime check.
+
+[Architecture decisions](docs/adr/README.md) record durable choices. [GitHub Issues](https://github.com/jhs88/pi-tooling/issues) tracks work using the [engineering skills configuration](docs/agents/issue-tracker.md).
 
 ## Attribution
 

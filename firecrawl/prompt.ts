@@ -3,7 +3,10 @@
 export const SEARCH_TOOL_DESCRIPTION =
   "Search the web with Firecrawl. Returns web, news, or image results. Output is limited to 50KB or 2000 lines; complete truncated output is saved to a temporary file.";
 
-/** Adds Firecrawl's current-information search capability to the model's tool prompt. */
+/**
+ * Adds Firecrawl's current-information search capability to the model's tool
+ * prompt.
+ */
 export const SEARCH_PROMPT_SNIPPET =
   "Search the web with Firecrawl for current information.";
 
@@ -54,11 +57,17 @@ export const CRAWL_PARAMETER_DESCRIPTIONS = {
 export const SCRAPE_TOOL_DESCRIPTION =
   "Scrape one page with Firecrawl and return markdown. Output is limited to 50KB or 2000 lines; complete truncated output is saved to a temporary file.";
 
-/** Adds Firecrawl's readable single-page fetch capability to the model's tool prompt. */
+/**
+ * Adds Firecrawl's readable single-page fetch capability to the model's tool
+ * prompt.
+ */
 export const SCRAPE_PROMPT_SNIPPET =
   "Fetch one URL as readable markdown with Firecrawl.";
 
-/** Guides the model to use scrape for one known page and crawl for multiple pages. */
+/**
+ * Guides the model to use scrape for one known page and crawl for multiple
+ * pages.
+ */
 export const SCRAPE_PROMPT_GUIDELINES = [
   "Use scrape when you need the full readable markdown content of one known URL.",
   "Prefer scrape over bash or raw HTTP fetching for web pages because scrape returns cleaned content.",

@@ -21,7 +21,9 @@ test("the headless resolver rejects relative or invalid host package overrides",
     /must be an absolute package directory/,
   );
   await assert.rejects(
-    resolvePiCodingAgentPackageRoot({ PI_A2A_PI_PACKAGE: path.dirname(packageRoot) }),
+    resolvePiCodingAgentPackageRoot({
+      PI_A2A_PI_PACKAGE: path.dirname(packageRoot),
+    }),
     /is not a Pi coding-agent package directory/,
   );
 });
