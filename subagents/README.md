@@ -65,3 +65,11 @@ Installed packages may now contribute agents and workflow scripts by default. Se
 ## Roll back
 
 Set `PI_TOOLING_SUBAGENTS_COMPAT=0` and restart the Pi process and T3 backend. In PowerShell, use `$env:PI_TOOLING_SUBAGENTS_COMPAT = "0"`. Unsetting the variable enables the adapter again on supported hosts. This naming adapter does not modify the separate subagents package. Native MCP comes from upstream; the old patch command has been removed.
+
+## Verify upstream upgrades
+
+Dependabot is configured to open weekly upgrade PRs for the separate upstream package. Review its release changes before adding an exact version to `subagents/versions.ts`; unreviewed upgrades fail the dependency guard instead of silently disabling aliases.
+
+Run `npm run verify:subagents` after installing the candidate development dependency. It exercises the existing SDK, T3 routing, permission, redaction, cancellation, workflow, native MCP, and real CLI RPC checks without model inference. Run `npm run verify` for the complete repository checks.
+
+CI repeats the compatibility checks against every reviewed version. Update the live Pi installation separately after the upgrade passes review and verification.

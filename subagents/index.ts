@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionToolContext, ToolDefinition, ToolLoadout } 
 import { Type, type TSchema } from "typebox";
 import { executeVisibleSubagent, readResult, readArgs, type ExecutableTool, type ToolResult } from "./visible.ts";
 import { hasT3DelegationBridge, T3_DELEGATION_GUIDANCE } from "./t3.ts";
+import { isReviewedSubagentsVersion } from "./versions.ts";
 
 export const TOOL_ALIASES = {
   Agent: "subagent",
@@ -62,7 +63,7 @@ export function isPinnedSubagentsSource(path: string): boolean {
   for (;;) {
     try {
       const pkg: unknown = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
-      return pkg !== null && typeof pkg === "object" && "name" in pkg && "version" in pkg && pkg.name === "@tintinweb/pi-subagents" && (pkg.version === "0.22.0" || pkg.version === "0.23.0");
+      return pkg !== null && typeof pkg === "object" && "name" in pkg && "version" in pkg && pkg.name === "@tintinweb/pi-subagents" && isReviewedSubagentsVersion(pkg.version);
     } catch { /* walk to the package root */ }
     const parent = dirname(directory);
     if (parent === directory) return false;

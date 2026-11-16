@@ -1,46 +1,31 @@
-# Issue tracker: Hermes Kanban
+# Issue tracker: GitHub
 
-This project uses Hermes Kanban board `pi-tooling` as its primary issue and work tracker.
+Issues and specs live in GitHub Issues for `jhs88/pi-tooling`. Use the `gh` CLI from this checkout.
 
-GitHub Issues and tracked `.scratch/` Markdown are not the default management lanes. Use GitHub only when the user explicitly requests an issue, pull request, release, or other remote workflow. Historical local-Markdown planning artifacts are preserved under `docs/history/` and must not be treated as live tickets.
+## Conventions
 
-## Board
+- Before creating issues, verify the target with `gh repo view --json nameWithOwner`.
+- Create an issue with `gh issue create --repo jhs88/pi-tooling --title "<title>" --body-file <file>`.
+- Read an issue with `gh issue view <number> --json number,title,body,labels,comments`.
+- List issues with `gh issue list --state open --json number,title,labels,assignees`. Add `--label` to filter by role.
+- Comment with `gh issue comment <number> --body-file <file>`.
+- Apply or remove labels with `gh issue edit <number> --add-label "<label>"` or `--remove-label "<label>"`. Use [the triage labels](triage-labels.md).
+- To close an issue, post the explanation first, then run `gh issue close <number>`.
 
-- **Board slug:** `pi-tooling`
-- **Default work directory:** the local `pi-tooling` checkout
-- **Inspect:** `hermes kanban --board pi-tooling stats`
-- **List:** `hermes kanban --board pi-tooling list`
-- **Set the checkout:** `hermes kanban boards set-default-workdir pi-tooling "$PWD"`
-- **Create:** `hermes kanban --board pi-tooling create "<title>" --body "<acceptance criteria>" --workspace "dir:$PWD"`
+Use files with actual newlines for multiline issue bodies and comments. Keep task status and implementation checklists in issues; use [ADRs](../adr/README.md) for durable architectural decisions.
 
-Use idempotency keys for automation-created cards. Link real parent task IDs when work is genuinely dependent; do not infer dependencies from wording alone.
+## Parent tickets and blockers
 
-## Routing
+Use GitHub sub-issues for parent-child relationships and native issue dependencies for blockers. Read the installed CLI's help for supported commands. When those features are unavailable, put `Part of #<parent>` and `Blocked by: #<number>` at the top of the child body, and link children in the parent's task list. A ticket is ready only when all its blockers are closed.
 
-Only configured profiles may be assigned. Check `hermes profile list` before creating cards and route work by capability:
+For `/wayfinder`, keep one map issue labelled `wayfinder:map` with Notes, Decisions-so-far, and Fog sections. Link child issues to the map and use `wayfinder:<type>` labels for `research`, `prototype`, `grilling`, or `task`. Claim work by assigning yourself. Choose the first unassigned, unblocked child in map order. On completion, comment, close the child, and add the result and issue link to the map's Decisions-so-far.
 
-- use the primary/orchestrator profile for planning, integration, verification, and final decisions;
-- use a Pi-backed profile for bounded implementation or review only when the card explicitly names the workspace, allowed command scope, acceptance criteria, and no-release rules;
-- use alternate coding profiles only when they are configured and explicitly appropriate for the task.
+## Pull requests as a triage surface
 
-Do not invent profile names or assume that another installation has the same profile roster.
+**PRs as a request surface: no.**
 
-## Human and release gates
+Triage issues by default. Change this flag to `yes` if external pull requests should enter the same triage queue.
 
-Cards that require a user decision, commit, push, merge, or release must block with a precise reason. Agents may prepare and verify changes but must not perform those actions without explicit user direction.
+## Skill instructions
 
-Kanban and Pi coordinate development; they are not runtime stages in the package.
-
-## Triage states
-
-Map the canonical five-role triage vocabulary to Kanban states and card metadata:
-
-| Role | Kanban representation | Meaning |
-| --- | --- | --- |
-| `needs-triage` | `triage` | Needs specification or maintainer evaluation |
-| `needs-info` | `blocked` with a precise question | Waiting for missing information |
-| `ready-for-agent` | `ready` with a configured assignee | Fully specified and runnable by an agent |
-| `ready-for-human` | `blocked` with a human-action reason | Requires a human decision or operation |
-| `wontfix` | `archived` with an explanatory comment | Intentionally not actioned |
-
-Kanban state and comment history are authoritative; do not create GitHub labels to mirror these roles.
+When a skill says "publish to the issue tracker", create a GitHub issue. When it says "fetch the relevant ticket", read the GitHub issue.

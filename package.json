@@ -29,7 +29,8 @@
     "check": "tsc --noEmit -p .",
     "test": "node --test --experimental-strip-types a2a/*.test.ts ask-user/*.test.ts background-terminals/*.test.ts file-search/*.test.ts firecrawl/*.test.ts integration/*.test.ts shared/*.test.ts subagents/*.test.ts subagents/*.test.mjs",
     "verify": "npm run check && npm test",
-    "verify:production": "node scripts/verify-production-install.mjs"
+    "verify:production": "node scripts/verify-production-install.mjs",
+    "verify:subagents": "node --experimental-strip-types scripts/verify-subagents.mjs"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",

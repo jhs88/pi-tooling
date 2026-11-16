@@ -48,7 +48,7 @@ In verified T3 Code sessions, the layer prefers T3's native delegation tools so 
 
 ## Development
 
-Read [CONTEXT.md](CONTEXT.md) and [AGENTS.md](AGENTS.md) before changing architecture or runtime behavior.
+Read [AGENTS.md](AGENTS.md) and the [glossary](GLOSSARY.md) before changing architecture or runtime behavior.
 
 ```bash
 npm ci
@@ -57,7 +57,7 @@ npm run verify
 
 Verification runs TypeScript checks and the complete test suite. Packaging changes also require the production dependency checks in [AGENTS.md](AGENTS.md). `npm run verify:production` tests an isolated production install and the headless A2A runtime check.
 
-[Architecture decisions](docs/adr/README.md) record durable choices. Hermes Kanban board `pi-tooling` tracks active work; [docs/history](docs/history/) preserves the read-only planning archive.
+[Architecture decisions](docs/adr/README.md) record durable choices. [GitHub Issues](https://github.com/jhs88/pi-tooling/issues) tracks work using the [engineering skills configuration](docs/agents/issue-tracker.md).
 
 ## Attribution
 

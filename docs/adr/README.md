@@ -8,5 +8,3 @@ Use filenames such as `0001-managed-git-package.md` and include:
 2. **Context** — the problem and constraints.
 3. **Decision** — the chosen architecture.
 4. **Consequences** — benefits, costs, and follow-up implications.
-
-Task status and implementation checklists belong on Hermes Kanban board `pi-tooling`, not in ADRs.

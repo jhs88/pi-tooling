@@ -8,16 +8,17 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
+import { isReviewedSubagentsVersion } from "./versions.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const options = Object.fromEntries(process.argv.slice(2).map((arg) => {
   const index = arg.indexOf("="); if (index < 0) throw new Error("Use --option=value");
   return [arg.slice(0, index), arg.slice(index + 1)];
 }));
-if (!options["--package-dir"]) throw new Error("--package-dir must point to a scratch installation of @tintinweb/pi-subagents@0.22.0 or 0.23.0");
+if (!options["--package-dir"]) throw new Error("--package-dir must point to an installation of a reviewed @tintinweb/pi-subagents release");
 const packageDir = resolve(options["--package-dir"]);
 const manifest = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
-assert.equal(manifest.name, "@tintinweb/pi-subagents"); assert.ok(["0.22.0", "0.23.0"].includes(manifest.version));
+assert.equal(manifest.name, "@tintinweb/pi-subagents"); assert.ok(isReviewedSubagentsVersion(manifest.version), `Unreviewed upstream release: ${manifest.version}`);
 const root = options["--artifact-dir"] ? resolve(options["--artifact-dir"]) : await mkdtemp(join(tmpdir(), "pi-subagents-rpc-"));
 await mkdir(root, { recursive: true });
 

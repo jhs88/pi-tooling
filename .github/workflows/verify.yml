@@ -12,6 +12,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      subagent-versions: ${{ steps.subagent-versions.outputs.versions }}
     env:
       PI_OFFLINE: "1"
       PI_TELEMETRY: "0"
@@ -22,7 +24,32 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Read reviewed subagent releases
+        id: subagent-versions
+        run: |
+          node --experimental-strip-types --input-type=module -e 'import { REVIEWED_SUBAGENTS_VERSIONS } from "./subagents/versions.ts"; console.log(`versions=${JSON.stringify(REVIEWED_SUBAGENTS_VERSIONS)}`)' >> "$GITHUB_OUTPUT"
       - run: npm run verify
       - name: Exercise real Pi RPC without inference
         run: node subagents/rpc-smoke.mjs --pi="$PWD/node_modules/.bin/pi" --package-dir="$PWD/node_modules/@tintinweb/pi-subagents"
       - run: npm run verify:production
+
+  subagent-compatibility:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(needs.verify.outputs.subagent-versions) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install reviewed upstream release
+        env:
+          SUBAGENT_VERSION: ${{ matrix.version }}
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund "@tintinweb/pi-subagents@$SUBAGENT_VERSION"
+      - run: npm run verify:subagents

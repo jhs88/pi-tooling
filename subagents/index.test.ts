@@ -8,6 +8,7 @@ import { Type, type TSchema } from "typebox";
 import register, { TOOL_ALIASES } from "./index.ts";
 import { readResult, type ToolResult } from "./visible.ts";
 import { T3_NATIVE_TOOLS } from "./t3.ts";
+import { isReviewedSubagentsVersion, REVIEWED_SUBAGENTS_VERSIONS } from "./versions.ts";
 
 const usage = { input: 0, output: 12, cacheRead: 0, cacheWrite: 0, totalTokens: 12, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 type Schema = TSchema & { required?: string[]; properties: Record<string, TSchema & { default?: unknown }> };
@@ -153,7 +154,7 @@ for (const t3 of ["wrong-source", "missing-tool"] as const) test(`unverified T3 
   } finally { h.close(); }
 });
 
-for (const version of ["0.22.0", "0.23.0"]) for (const compat of [undefined, "1"]) test(`compatibility enables aliases for reviewed ${version} with switch ${compat ?? "unset"}`, () => {
+for (const version of REVIEWED_SUBAGENTS_VERSIONS) for (const compat of [undefined, "1"]) test(`compatibility enables aliases for reviewed ${version} with switch ${compat ?? "unset"}`, () => {
   const h = host({ compat, version });
   try {
     h.handlers.get("session_start")!();
@@ -281,11 +282,11 @@ test("unavailable original executor leaves its declaration visible, other aliase
   } finally { h.close(); }
 });
 
-for (const version of ["0.19.0", "0.20.0", "0.21.0", "0.22.0", "0.23.0", "0.24.0"]) test(`unreviewed or lost metadata never hides originals, initial ${version}`, () => {
+for (const version of ["0.19.0", "0.20.0", "0.21.0", ...REVIEWED_SUBAGENTS_VERSIONS, "999.0.0"]) test(`unreviewed or lost metadata never hides originals, initial ${version}`, () => {
   const h = host({ version });
   try {
     h.handlers.get("session_start")!();
-    if (!["0.22.0", "0.23.0"].includes(version)) assert.deepEqual(h.declared().sort(), Object.keys(TOOL_ALIASES).sort());
+    if (!isReviewedSubagentsVersion(version)) assert.deepEqual(h.declared().sort(), Object.keys(TOOL_ALIASES).sort());
     writeFileSync(join(h.directory, "package.json"), JSON.stringify({ name: "@tintinweb/pi-subagents", version: "0.20.0" }));
     h.handlers.get("before_agent_start")!();
     assert.deepEqual(h.declared().sort(), Object.keys(TOOL_ALIASES).sort());

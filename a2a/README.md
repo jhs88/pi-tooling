@@ -87,7 +87,7 @@ Returned and retained task text is capped at 64 KiB with UTF-8-safe truncation. 
 
 ## Verification boundary
 
-An A2A `TASK_STATE_COMPLETED` response is not proof that a coding task is correct. Hermes must inspect repository artifacts and run the repository's tests independently. Keep ACP/delegation and Kanban available as fallback coordination paths.
+An A2A `TASK_STATE_COMPLETED` response is not proof that a coding task is correct. The calling agent must inspect repository artifacts and run the repository's tests independently.
 
 Run `npm run verify:production` from a development checkout to pack the package, install it without development or Pi peer packages, and execute the headless runtime check against the host-provided Pi package.
 
