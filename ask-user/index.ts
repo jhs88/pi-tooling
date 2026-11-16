@@ -9,11 +9,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   Editor,
+  CURSOR_MARKER,
   type EditorTheme,
   Key,
   matchesKey,
+  parseKey,
   Text,
   truncateToWidth,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import {
@@ -62,29 +65,6 @@ interface AskUserDetails {
 type Selection = { answer: string; wasCustom: boolean; index?: number } | null;
 type DisplayOption = AskUserInput["options"][number] & { isOther?: boolean };
 
-function wrapText(text: string, width: number): string[] {
-  const lines: string[] = [];
-  for (const paragraph of text.split("\n")) {
-    const words = paragraph.split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      lines.push("");
-      continue;
-    }
-    let current = "";
-    for (const word of words) {
-      const next = current ? `${current} ${word}` : word;
-      if (current && next.length > width) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = next;
-      }
-    }
-    if (current) lines.push(current);
-  }
-  return lines;
-}
-
 export default function askUser(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "ask_user",
@@ -111,9 +91,38 @@ export default function askUser(pi: ExtensionAPI): void {
         };
       };
 
-      // Pi RPC reports hasUI=true but cannot host terminal custom components.
-      if (ctx.mode !== "tui") return reply({ kind: "no-ui" });
+      if (ctx.mode !== "tui" && ctx.mode !== "rpc") return reply({ kind: "no-ui" });
       if (signal?.aborted) return reply({ kind: "aborted" });
+
+      // T3 maps Pi's standard RPC dialogs to native user-input cards. Keep
+      // terminal components out of this path; RPC cannot render them.
+      if (ctx.mode === "rpc") {
+        const options = params.options.map((option, index) =>
+          `${index + 1}. ${sanitizeTerminalLine(option.label)}${option.description ? `\n${sanitizeTerminalLine(option.description)}` : ""}`,
+        );
+        const customOption = "Write my own answer…";
+        try {
+          const selected = await ctx.ui.select(sanitizeTerminalText(params.question), [...options, customOption], { signal });
+          if (signal?.aborted) return reply({ kind: "aborted" });
+          if (selected === undefined) return reply({ kind: "dismissed" });
+          const index = options.indexOf(selected);
+          if (index !== -1) {
+            return reply({ kind: "selected", answer: params.options[index].label, index: index + 1 });
+          }
+          // T3 can return typed text directly. Other RPC hosts may require
+          // selecting the custom option before opening a text input.
+          const answer = selected === customOption
+            ? await ctx.ui.input(sanitizeTerminalText(params.question), "Type your answer", { signal })
+            : selected;
+          if (signal?.aborted) return reply({ kind: "aborted" });
+          return answer?.trim()
+            ? reply({ kind: "custom", answer: answer.trim() })
+            : reply({ kind: "dismissed" });
+        } catch (error) {
+          if (signal?.aborted) return reply({ kind: "aborted" });
+          throw error;
+        }
+      }
 
       const allOptions: DisplayOption[] = [
         ...params.options,
@@ -126,7 +135,10 @@ export default function askUser(pi: ExtensionAPI): void {
           let optionIndex = 0;
           let editMode = false;
           let cachedLines: string[] | undefined;
+          let cachedWidth = 0;
+          let cachedHeight = 0;
           let settled = false;
+          let focused = false;
 
           const editorTheme: EditorTheme = {
             borderColor: (text) => theme.fg("accent", text),
@@ -154,6 +166,7 @@ export default function askUser(pi: ExtensionAPI): void {
           if (signal?.aborted) queueMicrotask(abort);
 
           const refresh = () => {
+            editor.focused = focused && editMode;
             cachedLines = undefined;
             tui.requestRender();
           };
@@ -161,11 +174,7 @@ export default function askUser(pi: ExtensionAPI): void {
           editor.onSubmit = (value) => {
             const answer = value.trim();
             if (answer) finish({ answer, wasCustom: true });
-            else {
-              editMode = false;
-              editor.setText("");
-              refresh();
-            }
+            else refresh();
           };
 
           const select = (index: number) => {
@@ -180,10 +189,16 @@ export default function askUser(pi: ExtensionAPI): void {
           };
 
           const handleInput = (data: string) => {
+            if (settled) return;
+            if (matchesKey(data, Key.tab)) {
+              editMode = !editMode;
+              if (editMode) optionIndex = allOptions.length - 1;
+              refresh();
+              return;
+            }
             if (editMode) {
               if (matchesKey(data, Key.escape)) {
                 editMode = false;
-                editor.setText("");
                 refresh();
                 return;
               }
@@ -201,67 +216,87 @@ export default function askUser(pi: ExtensionAPI): void {
               refresh();
               return;
             }
-            if (data.length === 1 && data >= "1" && data <= String(allOptions.length)) {
-              select(Number(data) - 1);
+            const pressedKey = parseKey(data);
+            const numberIndex = allOptions.findIndex((_option, index) => pressedKey === String(index + 1));
+            if (numberIndex !== -1) {
+              optionIndex = numberIndex;
+              refresh();
               return;
             }
             if (matchesKey(data, Key.enter)) {
               select(optionIndex);
               return;
             }
-            if (matchesKey(data, Key.escape)) finish(null);
+            if (matchesKey(data, Key.escape)) {
+              finish(null);
+              return;
+            }
+            // Let Editor decode the host's negotiated keyboard protocol.
+            const previousText = editor.getText();
+            editor.handleInput(data);
+            if (data.startsWith("\x1b[200~") || editor.getText() !== previousText) {
+              editMode = true;
+              optionIndex = allOptions.length - 1;
+              refresh();
+            }
           };
 
           const render = (width: number): string[] => {
-            if (cachedLines) return cachedLines;
+            // Leave room for the host's transcript, status, and footer. Scroll
+            // choices independently so the custom editor stays on screen.
+            const height = Math.max(1, tui.terminal.rows - 6);
+            if (cachedLines && cachedWidth === width && cachedHeight === height) return cachedLines;
             const lines: string[] = [];
+            let selectedLine = 0;
             const add = (line: string) => lines.push(truncateToWidth(line, width));
-            const title = " Question ";
-            add(theme.fg("accent", `─${title}${"─".repeat(Math.max(0, width - title.length - 1))}`));
-            for (const line of wrapText(
-              sanitizeTerminalText(params.question),
-              Math.max(10, width - 2),
-            )) {
-              add(` ${theme.fg("text", theme.bold(line))}`);
-            }
+            const wrapped = (text: string, indent: string, color: "text" | "accent" | "muted" | "dim", bold = false) => {
+              for (const line of wrapTextWithAnsi(sanitizeTerminalText(text), Math.max(1, width - indent.length - 1))) {
+                add(indent + theme.fg(color, bold ? theme.bold(line) : line));
+              }
+            };
+            wrapped("Question", " ", "muted");
+            wrapped(params.question, " ", "text", true);
             lines.push("");
             allOptions.forEach((option, index) => {
               const selected = index === optionIndex;
-              const prefix = selected ? theme.fg("accent", " ❯ ") : "   ";
-              const marker = option.isOther ? "✎" : `${index + 1}.`;
-              const color = selected || (option.isOther && editMode)
-                ? "accent"
-                : option.isOther
-                  ? "muted"
-                  : "text";
-              add(
-                prefix +
-                  theme.fg(
-                    color,
-                    `${marker} ${sanitizeTerminalLine(option.label)}`,
-                  ),
-              );
-              if (option.description) {
-                add(
-                  `      ${theme.fg("muted", sanitizeTerminalLine(option.description))}`,
-                );
-              }
+              if (selected) selectedLine = lines.length;
+              const color = selected ? "accent" : option.isOther ? "muted" : "text";
+              const labelLines = wrapTextWithAnsi(sanitizeTerminalLine(option.label), Math.max(1, width - 7));
+              labelLines.forEach((line, lineIndex) => {
+                const prefix = lineIndex === 0
+                  ? `${selected ? " ❯ " : "   "}${index + 1}. `
+                  : "      ";
+                add(theme.fg(color, prefix + (selected ? theme.bold(line) : line)));
+              });
+              if (option.description) wrapped(sanitizeTerminalLine(option.description), "      ", "muted");
+              if (index < allOptions.length - 1) lines.push("");
             });
-            if (editMode) {
-              lines.push("");
-              add(theme.fg("muted", " Your answer:"));
-              for (const line of editor.render(Math.max(10, width - 2))) add(` ${line}`);
-            }
-            lines.push("");
-            add(theme.fg("dim", editMode
-              ? " Enter submit • Esc back to options"
-              : ` ↑↓ or 1-${allOptions.length} select • Enter confirm • Esc dismiss`));
-            add(theme.fg("accent", "─".repeat(width)));
-            cachedLines = lines;
-            return lines;
+            const editorLines = editor.render(Math.max(1, width - 2));
+            const editorHeight = Math.max(1, height - 4);
+            const cursorLine = editorLines.findIndex((line) => line.includes(CURSOR_MARKER));
+            const editorStart = Math.max(0, cursorLine - editorHeight + 1);
+            const footer = [
+              theme.fg("muted", " Your answer" + (editMode ? "" : " · type to write")),
+              ...editorLines.slice(editorStart, editorStart + editorHeight).map((line) => ` ${line}`),
+              theme.fg("dim", editMode
+              ? "Enter submit · Tab/Esc choices"
+              : width < 34 ? "↑↓ · Enter · Tab · Esc" : `↑↓/1-${allOptions.length} · Enter · Tab write · Esc`),
+            ].map((line) => truncateToWidth(line, width));
+            const choiceHeight = Math.max(1, height - footer.length);
+            const start = Math.max(0, Math.min(selectedLine - Math.floor(choiceHeight / 2), lines.length - choiceHeight));
+            cachedWidth = width;
+            cachedHeight = height;
+            cachedLines = [...lines.slice(start, start + choiceHeight), ...footer].slice(0, height);
+            return cachedLines;
           };
 
           return {
+            get focused() { return focused; },
+            set focused(value: boolean) {
+              focused = value;
+              editor.focused = value && editMode;
+              cachedLines = undefined;
+            },
             render,
             invalidate: () => {
               cachedLines = undefined;
@@ -284,14 +319,14 @@ export default function askUser(pi: ExtensionAPI): void {
 
     renderCall(args, theme) {
       let text = theme.fg("toolTitle", theme.bold("ask_user "));
-      text += theme.fg("muted", sanitizeTerminalText(args.question));
-      if (args.options.length > 0) {
+      text += theme.fg("muted", sanitizeTerminalText(typeof args?.question === "string" ? args.question : ""));
+      if (Array.isArray(args?.options) && args.options.length > 0) {
         text += `\n${theme.fg(
           "dim",
           `  ${args.options
             .map(
               (option, index) =>
-                `${index + 1}. ${sanitizeTerminalLine(option.label)}`,
+                `${index + 1}. ${sanitizeTerminalLine(typeof option?.label === "string" ? option.label : "")}`,
             )
             .join("  ")}`,
         )}`;
@@ -311,7 +346,7 @@ export default function askUser(pi: ExtensionAPI): void {
       }
       if (details.outcome === "aborted") return new Text(theme.fg("warning", "■ aborted"), 0, 0);
       if (details.outcome === "dismissed") return new Text(theme.fg("warning", "✗ dismissed"), 0, 0);
-      if (details.outcome === "no-ui") return new Text(theme.fg("muted", "terminal UI unavailable"), 0, 0);
+      if (details.outcome === "no-ui") return new Text(theme.fg("muted", "interactive UI unavailable"), 0, 0);
       if (details.wasCustom) {
         return new Text(
           theme.fg("success", "✓ ") +

@@ -24,6 +24,7 @@ export const ASK_USER_PROMPT_SNIPPET =
 export const ASK_USER_PROMPT_GUIDELINES = [
   "Use ask_user when likely answers can be enumerated instead of asking in plain text.",
   "Ask exactly one question per ask_user call; ask follow-ups in later calls.",
+  "Prefer 2-3 concise options with a short description of each tradeoff. Put the recommended option first and suffix its label with '(Recommended)' when you have a recommendation.",
   "A dismissed or aborted ask_user call is not an answer; do not infer a choice.",
 ];
 
@@ -45,7 +46,7 @@ export type AskUserOutcome =
 export function buildAskUserResultMessage(outcome: AskUserOutcome): string {
   switch (outcome.kind) {
     case "no-ui":
-      return "No terminal UI is available, so ask_user could not display the question. Ask the user in plain text instead.";
+      return "No interactive UI is available, so ask_user could not display the question. Ask the user in plain text instead.";
     case "aborted":
       return "The ask_user interaction ended because the agent turn was aborted. The user did not answer.";
     case "dismissed":

@@ -35,7 +35,7 @@ test("ask_user sanitizes model-controlled TUI text", async () => {
   assert.ok(tool);
 
   let rendered: string[] = [];
-  const tui = { requestRender() {} } as unknown as TUI;
+  const tui = { requestRender() {}, terminal: { rows: 30 } } as unknown as TUI;
   const theme = {
     fg: (_color: string, text: string) => text,
     bold: (text: string) => text,
@@ -92,9 +92,25 @@ test("ask_user sanitizes model-controlled TUI text", async () => {
     )
     .render(100);
 
-  const output = [...callLines, ...rendered, ...resultLines].join("\n");
+  // The always-visible Editor owns these cursor styles and markers. Model-provided
+  // colors and terminal commands must still be stripped before rendering.
+  const output = [...callLines, ...rendered, ...resultLines].join("\n")
+    .replace(/\u001b_pi:\/?fc\u0007/g, "")
+    .replaceAll("\u001b[7m", "")
+    .replaceAll("\u001b[0m", "");
   assert.equal(rendered.every((line) => !line.includes("\n")), true);
   assert.doesNotMatch(output, /[\u001b\u009b\u009d]/);
   assert.doesNotMatch(output, /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
   assert.match(output, /visiblered/);
+});
+
+test("ask_user renders streamed partial arguments without falling back to unsanitized host output", () => {
+  let tool: CapturedAskUserTool | undefined;
+  askUser({ registerTool: (registered: unknown) => { tool = registered as CapturedAskUserTool; } } as unknown as ExtensionAPI);
+  assert.ok(tool);
+  const theme = { fg: (_color: string, text: string) => text, bold: (text: string) => text } as unknown as Theme;
+  for (const args of [{}, { question: MALICIOUS }, { options: [{}] }, { question: 1, options: [null, { label: MALICIOUS_LINE }] }]) {
+    const text = tool.renderCall(args as unknown as AskUserInput, theme).render(80).join("\n");
+    assert.doesNotMatch(text, /[\u001b\u009b\u009d]/);
+  }
 });
