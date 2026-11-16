@@ -125,7 +125,7 @@ function host({
       return active;
     },
     setActiveTools(names: string[]) {
-      active = names;
+      active = names.filter((name) => tools.has(name));
       prepare();
     },
   };
