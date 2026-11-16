@@ -30,3 +30,17 @@ Do not invent profile names or assume that another installation has the same pro
 Cards that require a user decision, commit, push, merge, or release must block with a precise reason. Agents may prepare and verify changes but must not perform those actions without explicit user direction.
 
 Kanban and Pi coordinate development; they are not runtime stages in the package.
+
+## Triage states
+
+Map the canonical five-role triage vocabulary to Kanban states and card metadata:
+
+| Role | Kanban representation | Meaning |
+| --- | --- | --- |
+| `needs-triage` | `triage` | Needs specification or maintainer evaluation |
+| `needs-info` | `blocked` with a precise question | Waiting for missing information |
+| `ready-for-agent` | `ready` with a configured assignee | Fully specified and runnable by an agent |
+| `ready-for-human` | `blocked` with a human-action reason | Requires a human decision or operation |
+| `wontfix` | `archived` with an explanatory comment | Intentionally not actioned |
+
+Kanban state and comment history are authoritative; do not create GitHub labels to mirror these roles.
