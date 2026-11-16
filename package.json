@@ -54,7 +54,7 @@
     "@earendil-works/pi-tui": "1.5.2",
     "@effect/tsgo": "0.69.0",
     "@eslint/js": "10.0.1",
-    "@tintinweb/pi-subagents": "0.23.0",
+    "@tintinweb/pi-subagents": "0.24.0",
     "@types/node": "26.6.6",
     "eslint": "10.15.0",
     "eslint-config-prettier": "10.1.8",
