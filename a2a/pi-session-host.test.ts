@@ -492,7 +492,7 @@ test("concurrent hosts serialize turns for one mapped context", async () => {
 
     const firstRun = firstHost.execute(executionInput("ctx-mapped-turn", "first"));
     let secondRun: Promise<unknown> | undefined;
-    let settlements: PromiseSettledResult<unknown>[] = [];
+    let settlements: PromiseSettledResult<unknown>[];
     try {
       await boundedBarrier(firstEntered.promise, "first mapped turn entry");
       secondRun = secondHost.execute(executionInput("ctx-mapped-turn", "second"));
@@ -614,7 +614,7 @@ test("unmaterialized session cleanup finishes before a competing host acquires t
       (error) => error,
     );
     await closeEntered.promise;
-    let lockHeldDuringCleanup = false;
+    let lockHeldDuringCleanup: boolean;
     let earlyOutcome: "entered" | "blocked" | undefined;
     let firstError: unknown;
     let secondError: unknown;

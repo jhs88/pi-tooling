@@ -26,11 +26,15 @@
     ]
   },
   "scripts": {
-    "check": "tsc --noEmit -p .",
+    "check": "node node_modules/typescript-native/bin/tsc --noEmit -p .",
     "test": "node --test --experimental-strip-types a2a/*.test.ts ask-user/*.test.ts background-terminals/*.test.ts file-search/*.test.ts firecrawl/*.test.ts integration/*.test.ts shared/*.test.ts subagents/*.test.ts subagents/*.test.mjs",
-    "verify": "npm run check && npm test",
+    "verify": "npm run lint && npm run format:check && npm run check && npm test",
     "verify:production": "node scripts/verify-production-install.mjs",
-    "verify:subagents": "node --experimental-strip-types scripts/verify-subagents.mjs"
+    "verify:subagents": "node --experimental-strip-types scripts/verify-subagents.mjs",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "npm run lint -- --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
@@ -49,9 +53,21 @@
     "@earendil-works/pi-coding-agent": "1.5.2",
     "@earendil-works/pi-tui": "1.5.2",
     "@effect/tsgo": "0.69.0",
+    "@eslint/js": "10.0.1",
     "@tintinweb/pi-subagents": "0.23.0",
     "@types/node": "26.6.6",
+    "eslint": "10.15.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.14.0",
+    "prettier": "3.10.1",
     "typebox": "1.4.7",
-    "typescript": "7.0.2"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2",
+    "typescript-native": "npm:typescript@7.0.2"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    }
   }
 }

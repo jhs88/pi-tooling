@@ -1,0 +1,6 @@
+.scratch/
+.cachebro/
+.pi-workflows/
+.pi-background/
+file-search/bin/
+package-lock.json

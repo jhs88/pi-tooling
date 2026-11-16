@@ -271,7 +271,7 @@ async function acquirePrivateDirectoryLock(
         throw metadataError;
       });
       if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
-        throw new Error(`${lockDescription} must be a private directory`);
+        throw new Error(`${lockDescription} must be a private directory`, { cause: error });
       }
       if (!reportedWait) {
         reportedWait = true;
@@ -556,7 +556,7 @@ export class PiSessionHost {
         if (abortPromise) await abortPromise.catch(() => {});
         await this.#rememberContextIfPersisted(input.contextId, session);
         if (this.#closed) {
-          throw new Error("Pi session host is closed");
+          throw new Error("Pi session host is closed", { cause: error });
         }
         if (input.signal.aborted) {
           throw abortError(input.signal);

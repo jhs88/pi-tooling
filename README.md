@@ -55,7 +55,13 @@ npm ci
 npm run verify
 ```
 
-Verification runs TypeScript checks and the complete test suite. Packaging changes also require the production dependency checks in [AGENTS.md](AGENTS.md). `npm run verify:production` tests an isolated production install and the headless A2A runtime check.
+Verification runs ESLint, Prettier's formatting check, TypeScript checks, and the complete test suite. Run `npm run lint:fix` for automatic lint fixes and `npm run format` to format source, tests, configuration, and Markdown. Individual checks are available as `npm run lint`, `npm run format:check`, `npm run check`, and `npm test`.
+
+Type checking uses the TypeScript 7 CLI installed as `typescript-native`. ESLint uses TypeScript 6's compiler API through `typescript`, within [typescript-eslint's supported range](https://typescript-eslint.io/users/dependency-versions/).
+
+The scoped `minimatch` override supplies the [patched release](https://github.com/advisories/GHSA-g3hv-75wg-m249) until typescript-eslint updates its dependency range.
+
+Packaging changes also require the production dependency checks in [AGENTS.md](AGENTS.md). `npm run verify:production` tests an isolated production install and the headless A2A runtime check.
 
 [Architecture decisions](docs/adr/README.md) record durable choices. [GitHub Issues](https://github.com/jhs88/pi-tooling/issues) tracks work using the [engineering skills configuration](docs/agents/issue-tracker.md).
 
